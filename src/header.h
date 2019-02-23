@@ -17,7 +17,19 @@
 #define PASSWORD_SIZE (20)
 #define SALT_SIZE (2)
 
-#define N_PASSWORDS (4)
+#define MAX_TASKS (4)
+
+#define TAG_SIZE 100
+
+//Message related constants (labels)
+//finalize calculation and die
+#define FINALIZE (1)          
+//order to decode a password
+#define DECODE_REQUEST (2)
+//response with the password decoded
+#define DECODE_RESPONSE (3)
+//stop decoding and go to recive a message
+#define DECODE_STOP (4)
 
 //Data definition
 typedef unsigned short bool;
@@ -31,10 +43,15 @@ typedef struct{
 }Password;
 
 typedef struct{
+    //here goes the range to find random numbers
+    Password p;
+}Request;
+
+typedef struct{
 	int id;
 	int ntries;
 	Password p;
-}Solution;
+}Response;
 
 typedef enum { MASTER_MODE, CALCULATOR_MODE } CalculationMode;
 
@@ -45,6 +62,9 @@ typedef enum { MASTER_MODE, CALCULATOR_MODE } CalculationMode;
 #define ID ( getId() )
 #define MASTER_ID ( 0 )
 #define IS_MASTER(id) ( (id) == (MASTER_ID) )
+
+//task management
+#define NTASKS ( getNtasks() )
 
 //Random number generation
 #define MAX_RAND ( 100000000 )
@@ -59,12 +79,17 @@ typedef enum { MASTER_MODE, CALCULATOR_MODE } CalculationMode;
 		sprintf(str,"%08d",GET_RANDOM_IN_BOUNDS(a,b));	\
 	}while(0)
 
+#define GET_SALT(encrypted, salt)   \
+    do{                             \
+        strncpy(salt,encrypted,2);  \
+    }while(0)
+
 //Error and log management
-#define MPI_EXIT(code) 				\
-    do{								\
-		LOG("\n[ID:%d] Ended",ID);	\
-    	MPI_Finalize();				\
-    	exit(code);					\
+#define MPI_EXIT(code)                     \
+    do{	                                   \
+		LOG("\n[ID:%d] Finalized",ID);     \
+    	MPI_Finalize();                    \
+    	exit(code);                        \
     }while(0)
 
 #define LOG(str, ...)                           \
