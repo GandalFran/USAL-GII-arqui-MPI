@@ -3,8 +3,7 @@
 
 //Task definition
 void communicationTask();
-void communicationAndCalculationTask(Password p);
-void calculationTask();
+void calculationTask(CalculationMode m, Password p);
 
 //Calculus definition
 bool doCalculus(Password * p, SaltPointer salt);
@@ -15,6 +14,7 @@ int getId();
 // -------------------------------- Main --------------------------------
 
 int main (int argc, char * argv[]){
+	Password p;
 
 	//initialize the MPI
 	MPI_Init(&argc, &argv);
@@ -24,7 +24,8 @@ int main (int argc, char * argv[]){
 	if(IS_MASTER(ID)){
 		communicationTask();
 	}else{
-		calculationTask();
+		//here it is not neccesary to send a p
+		calculationTask(p);
 	}
 
 	//Finalize execution
@@ -38,10 +39,12 @@ void communicationTask(){
 	int i;
 	Solution solutionList[N_PASSWORDS]; 
 	Password passwordList[N_PASSWORDS];
+	bool isPasswordDecrypted[N_PASSWORDS];
 
 	//reset the solutionList and passwordList
 	memset(solutionList,0,N_PASSWORDS*sizeof(Solution));
 	memset(passwordList,0,N_PASSWORDS*sizeof(Password));
+	memset(isPasswordDecrypted,0,N_PASSWORDS*sizeof(bool));
 
 	//generate and send the passwords
 	for(i=0; i<N_PASSWORDS; i++){
@@ -56,67 +59,37 @@ void communicationTask(){
 		LOG("\n[ID:%d][Generated] %s Salt %s -> Encrypted %s -> send to %d",ID,passwordList[i].decrypted,salt,passwordList[i].decrypted,i);
 	}
 
-	//wait for all password except one
-	for(i=0; i < N_PASSWORDS-1; i++){
-		//blocking recv --> NOTE: for future work the main task should go to calculate each time it gives a password 
-
-		LOG("\n[ID:%d][Recived] %s -> Encrypted %s -> recived by %d in %d tries",ID,solutionList[i].p.decrypted,solutionList[i].p.decrypted,solutionList[i].id, solutionList[i].ntries);
-	}
-
-	//prepare the wait for the remaining password --> it should be to declare a handler or something like that
-
-	// then go to calculate the remaining password
+	//Calculate while waiting the child finish the password calculation
 	for(i=0; i < N_PASSWORDS; i++){
-		if( !IS_MASTER(solutionList[i].id) ){
-				LOG("\n[ID:%d] Entering in calculation",ID);
-				communicationAndCalculationTask(passwordList[i]);
-			break;
+		if( !isPasswordDecrypted[i] ){
+				LOG("\n[ID:%d] Entering in calculation of %d",ID,i);
+				calculationTask(passwordList[i]);
+				
+				//recive the password --> in a message
+
+
+				if(false ){ //if the master is the one who has solved, it isn't neccesary to do i--
+					i--;
+				}
+
+				//print the results
+				//LOG("\n[ID:%d][Recived] %s -> Encrypted %s -> recived by %d in %d tries",ID,solutionList[i].p.decrypted,solutionList[i].p.decrypted,solutionList[i].id, solutionList[i].ntries);
 		}
 	}
-
 }
 
-//same as calculation task, but with cheking of messages and password as parameter
-void communicationAndCalculationTask(Password p){
-	long ntries;
-	bool solutionFound;
-	Salt salt;
 
-	//obtain the salt
-	strncpy(salt,p.decrypted,2);
-
-	solutionFound = FALSE;
-	while(!solutionFound){
-		//increment the try number
-		ntries++;
-
-		//to the calculus
-		if(doCalculus(&p,salt)){
-			solutionFound = TRUE;
-			LOG("\n[ID:%d][NTRY:%ld] Found: %s -> %s ",ID,ntries,p.decrypted,p.encrypted);
-		}
-
-		//Non-blocking check if Master process has ended
-
-	};
-
-	//stop the child process which is processing the remaining password
-
-	//print the solution
-
-	//finalize
-	MPI_EXIT(EXIT_SUCCESS);
-}
-
-void calculationTask(){
+void calculationTask(Password p){
 	Solution s;
 	Password p;
 	long ntries;
 	bool solutionFound;
 	Salt salt;
 
-	//Wait to the fahter password
+	//Wait to the master password
+	if( !IS_MASTER(ID) ){
 
+	}
 
 	//obtain the salt
 	strncpy(salt,p.decrypted,2);
@@ -132,8 +105,18 @@ void calculationTask(){
 			LOG("\n[ID:%d][NTRY:%ld] Found: %s -> %s ",ID,ntries,p.decrypted,p.encrypted);
 		}
 
-		//Non-blocking check if Master has ordered to stop (our password has been taken by master and decrypted)
-		//	Note: if a message is recived, make an MPI_EXIT(EXIT_SUCCED)
+		if(IS_MASTER(ID)){
+			//Non-blocking check if is neccesary to handle a decrypt
+
+			//NOTE: change the false for a real condition to handle a solution
+			if(false){s
+				//return to handle the finished password
+				return;
+			}
+		}else{
+			//Non-blocking check if Master has ordered to stop (our password has been taken by master and decrypted)
+			//	Note: if a message is recived, make an MPI_EXIT(EXIT_SUCCED)
+		}
 
 	};
 
@@ -142,14 +125,18 @@ void calculationTask(){
 	s.ntries = ntries;
 	memcpy(&(s.p),&p,sizeof(Password));
 
-	//send father process the possible solution
+	if(IS_MASTER(ID)){
+		//stop the child process which is processing the remaining password
+	}		
+
+	//send father process the possible solution (in case of master process, send to itself)
+	
 
 }
 
 // -------------------------------- Calculus definition --------------------------------
 
-bool doCalculus(Password * p, SaltPointer salt){	
-	int randomNumber;
+bool doCalculus(Password * p, SaltPointer salt){
 	char possibleSolution[PASSWORD_SIZE], *possibleSolutionEncripted = NULL;
 
 	//generate and encript possible solution

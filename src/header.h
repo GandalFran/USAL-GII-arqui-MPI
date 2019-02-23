@@ -36,6 +36,7 @@ typedef struct{
 	Password p;
 }Solution;
 
+typedef enum { MASTER_MODE, CALCULATOR_MODE } CalculationMode;
 
 //define error messages
 #define USAGE_ERROR "./decrypt <encripted data (size = 9)>"
