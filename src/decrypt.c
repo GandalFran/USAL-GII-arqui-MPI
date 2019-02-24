@@ -3,20 +3,28 @@
 
 //Task definition
 void communicationTask();
-void calculationTask(CalculationMode m, Password p);
+void calculationTask();
+void masterCalculationTask();
 
 //Calculus definition
 bool doCalculus(Password * p, SaltPointer salt);
+
+//task division
+void doTaskDivision(Request * requestList, Work * taskSituation);
 
 //Wrapping and treatment of MPI library
 int getId();
 int getNtasks();
 
+//auxiliar
+char * passwordToString(Password p);
+char * requestToString(Request req);
+char * responseToString(Response res);
+
 
 // -------------------------------- Main --------------------------------
 
 int main (int argc, char * argv[]){
-	Password p;
 
 	//initialize the MPI
 	MPI_Init(&argc, &argv);
@@ -27,7 +35,7 @@ int main (int argc, char * argv[]){
 		communicationTask();
 	}else{
 		//here it is not neccesary to send a p
-		calculationTask(p);
+		calculationTask();
 	}
 
 	//Finalize execution
@@ -38,42 +46,59 @@ int main (int argc, char * argv[]){
 // -------------------------------- Task definition --------------------------------
 void communicationTask(){
 	Salt salt;
-	int i;
-	Solution solutionList[MAX_TASKS]; 
-	Password passwordList[MAX_TASKS];
-	bool isPasswordDecrypted[MAX_TASKS];
+	Response resTmp;
+	int solvedTasks, i;
 
-	//reset the solutionList and passwordList
-	memset(solutionList,0,MAX_TASKS*sizeof(Solution));
-	memset(passwordList,0,MAX_TASKS*sizeof(Password));
-	memset(isPasswordDecrypted,0,MAX_TASKS*sizeof(bool));
+	//------------------
+	//	To know the curren situation:
+	//		+ which task is doing which password -> taskSituation[ID]
+	//		+ wich passwords has been solved --> requestList[passwordId].finished
+	//------------------
+	Request requestList[MAX_TASKS];
+	Work taskSituation[MAX_TASKS];
+
+	//reset the control arrays
+	memset(requestList,0,MAX_TASKS*sizeof(Request));
+	memset(taskSituation,0,MAX_TASKS*sizeof(Work));
+
 
 	//generate passwords
 	for(i=0; i<NTASKS; i++){
+		requestList[i].p.passwordId = i;
+
 		GET_RANDMON_SALT(salt);
-		GET_RANDOM_STR_IN_BOUNDS(passwordList[i].decrypted,0,MAX_RAND);
-		strcpy(passwordList[i].encrypted, crypt(passwordList[i].decrypted,salt));
-		LOG("\n[ID:%d][Generated] %s",ID,passwordToString(passwordList[i]));
+		GET_RANDOM_STR_IN_BOUNDS(requestList[i].p.decrypted,0,MAX_RAND);
+		strcpy(requestList[i].p.encrypted, crypt(requestList[i].p.decrypted,salt));
+		
+		LOG("\n[ID %d][Generated] %s",ID,passwordToString(requestList[i].p));
 	}
 
-	notSolvedPasswords = NTASKS;
-	do{
+
+	for(solvedTasks = 0; solvedTasks < NTASKS; solvedTasks++){
 		//Division of tasks
-		doTaskDivision(passwordList,solutionList,isPasswordDecrypted);
+		doTaskDivision(requestList,taskSituation);
 
 		//go to the calculation -> there a REQUEST for calculus will be recived
 		masterCalculationTask();
 
-		//recv
+		//recv	
 
-		//response gestion
+		//-----response gestion------
+		LOG("\n[ID %d][Recived response] %s",ID,responseToString(resTmp));
 
-		if(false /*The father is the one who solved, stop the processes which are solving the same*/){
-			//stop the child process which is processing the remaining password
-		}	
+		//mark password as solved
+		requestList[resTmp.p.passwordId].finished = TRUE;
 
-		notSolvedPasswords--;
-	}while(notSolvedPasswords > 0);
+		//advise all tasks that are solving this password, to stop
+		for(i =0; i< NTASKS; i++){
+			if( taskSituation[i].passwordId == resTmp.p.passwordId ){
+				//send a stop message
+			}
+		}
+
+		//if neccesary save here the response, to do statistics before
+
+	}
 
 }
 
@@ -84,27 +109,25 @@ void calculationTask(){
 	bool recivedFinalizeOrder = FALSE;
 
 	//reset the response
-	memset(response,0,sizeof(Response));
-	response.id = ID;
+	memset(&response,0,sizeof(Response));
+	response.taskId = ID;
 
 	do{
 
 		//Reset the request and wait to password request or finalize
-		memset(request,0,sizeof(Request));
+		memset(&request,0,sizeof(Request));
 		//recv
 		LOG("\n[ID %d][Recived] %s",ID,requestToString(request));
 
 		//obtain the salt
-		GET_SALT(satl,request.p.encrypted);
+		GET_SALT(salt,request.p.encrypted);
 
 		do{
 			//increment the try number
 			response.ntries++;
 
 			//do the calculus and then check if the solution has been found
-			if(doCalculus(&p,salt)){
-				solutionFound = TRUE;
-
+			if(doCalculus(&(request.p),salt)){
 				//fill the response
 				memcpy(&(response.p),&(request.p),sizeof(Password));
 				LOG("\n[ID %d][Solution found] %s",ID,responseToString(response));
@@ -128,23 +151,23 @@ void masterCalculationTask(){
 	Response response;
 
 	//reset the response
-	memset(response,0,sizeof(Response));
-	response.id = ID;
+	memset(&response,0,sizeof(Response));
+	response.taskId = ID;
 
 	//Reset the request and wait to password request or finalize
-	memset(request,0,sizeof(Request));
+	memset(&request,0,sizeof(Request));
 	//recv
 	LOG("\n[ID %d][Recived] %s",ID,requestToString(request));
 
 	//obtain the salt
-	GET_SALT(satl,request.p.encrypted);
+	GET_SALT(salt,request.p.encrypted);
 
 	do{
 		//increment the try number
 		response.ntries++;
 
 		//do the calculus and then check if the solution has been found
-		if(doCalculus(&p,salt)){
+		if(doCalculus(&(request.p),salt)){
 			//fill the response
 			memcpy(&(response.p),&(request.p),sizeof(Password));
 			LOG("\n[ID %d][Solution found] %s",ID,responseToString(response));
@@ -180,15 +203,18 @@ bool doCalculus(Password * p, SaltPointer salt){
 
 // -------------------------------- Task division --------------------------------
 
-void doTaskDivision(Password * passwordList, Solution * solutionList, bool * isPasswordDecrypted){
+void doTaskDivision(Request * requestList, Work * taskSituation){
 	int i;
 
-	for(i=0; i < NTASKS; i++){
-		if( !isPasswordDecrypted[i] ){
-				LOG("\n[ID:%d] Entering in calculation of %d",ID,i);
-				calculationTask(passwordList[i]);
+	//for the moment, all the tasks are send to the 0 task 
+
+	for(i=0; i<NTASKS; i++){
+		if(!requestList[i].finished){
+			//send message to main task 
+			return;
 		}
 	}
+
 }
 
 // -------------------------------- MPI --------------------------------
@@ -198,7 +224,7 @@ int getId(){
 	static int internalId = -1;
 
 	if(-1 == internalId)
-		 MPI_Comm_rank(MPI_COMM_WORLD, &internalId);
+		MPI_Comm_rank(MPI_COMM_WORLD, &internalId);
 	
 	return internalId;
 }
@@ -208,18 +234,31 @@ int getNtasks(){
 	static int ntasks = -1;
 
 	if(-1 == ntasks)
-		 ntasks = MPI_Comm_rank();
+		MPI_Comm_size(MPI_COMM_WORLD, &ntasks);
 	
-	return ntsks;
+	return ntasks;
 }
 
-//others
+
+//Wrap the send and recive, to do a better logging
+void send(TaskID destinationAddr, void * data, int nElements, MPI_Datatype tipo_datos, MessageTag tag){
+	LOG("\n[ID %d][Send] Destination: %d, type:%s", ID, destinationAddr, MESSAGE_TAG_TOSTRING(tag));
+	MPI_Send(data, nElements, MPI_Datatype tipo_datos, destinationAddr, tag, MPI_COMM_WORLD);
+}
+
+void recv(TaskID destinationAddr, void * data, int nElements, MPI_Datatype tipo_datos, MessageTag tag){
+	MPI_Send(data, nElements, MPI_Datatype tipo_datos, destinationAddr, tag, MPI_COMM_WORLD);
+	LOG("\n[ID %d][recv] from: %d, type:%s", ID, destinationAddr, MESSAGE_TAG_TOSTRING(tag));
+}
+
+
+// -------------------------------- Auxiliar --------------------------------
 
 char * passwordToString(Password p){
 	static char tag[TAG_SIZE];
 
 	memset(tag,0,TAG_SIZE);
-	sprintf("Password{decrypted:%s, encrypted: %s, salt: %c%c}",p.decrypted,p.encrypted,p.encrypted[0],p.encrypted[1]);
+	sprintf(tag,"Password{id:%d, decrypted:%s, encrypted: %s, salt: %c%c}",p.passwordId,p.decrypted,p.encrypted,p.encrypted[0],p.encrypted[1]);
 
 	return tag;
 }
@@ -228,7 +267,7 @@ char * requestToString(Request req){
 	static char tag[TAG_SIZE];
 
 	memset(tag,0,TAG_SIZE);
-	sprintf("Request{password:%s }",passwordToString(req.p));
+	sprintf(tag,"Request{finished:%d, password:%s }",req.finished,passwordToString(req.p));
 
 	return tag;
 }
@@ -237,7 +276,7 @@ char * responseToString(Response res){
 	static char tag[TAG_SIZE];
 
 	memset(tag,0,TAG_SIZE);
-	sprintf("Response{id:%d, ntries: %d, password:%s }",res.id,res.ntries,passwordToString(res.p));
+	sprintf(tag,"Response{id:%d, ntries: %d, password:%s }",res.taskId,res.ntries,passwordToString(res.p));
 
 	return tag;
 }
