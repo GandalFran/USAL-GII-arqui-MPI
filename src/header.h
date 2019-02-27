@@ -39,6 +39,12 @@ typedef char * SaltPointer;
 
 typedef int PasswordID, TaskID, MessageTag;
 
+//NOTA
+//
+//      SI ALGUIEN TOCA EL ORDEN, NOMBRE, POSICION, .... DE ALGUNA ESTRUCTURA, LO MATO
+//          SI ALGUIEN CAMBIA ALGO DE LAS ESTRUCTURAS SIN CAMBIARLO LO MATO
+//                  SI CAMBIAS ALGO DISELO A FRAN, O SUFRIRAS LAS CONSECUENCIAS
+
 typedef struct{
     PasswordID passwordId;
 	char decrypted[PASSWORD_SIZE];
@@ -73,6 +79,11 @@ typedef struct{
 
 //task management
 #define NTASKS ( getNtasks() )
+
+//data types
+#define MPI_REQUEST (getMPI_Request())
+#define MPI_RESPONSE (getMPI_Response())
+#define MPI_PASSWORD (getMPI_Password())
 
 //Random number generation
 #define MAX_RAND ( 100000000 )
@@ -118,7 +129,7 @@ typedef struct{
 //Utils
 #define IS_EQUAL_TO_STRING(str1,str2) (strcmp(str1,str2)==0)
 
-#define MESSAGE_TAG_TOSTRING(msgTag)                        \
+#define MESSAGE_TAG_TOSTRING(msgtag)                        \
     ( ( msgtag == DECODE_REQUEST  ) ? ("DECODE_REQUEST")  : \
     ( ( msgtag == DECODE_RESPONSE ) ? ("DECODE_RESPONSE") : \
     ( ( msgtag == DECODE_STOP     ) ? ("DECODE_STOP")     : \
