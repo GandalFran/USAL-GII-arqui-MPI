@@ -38,8 +38,6 @@ void communicationTask(){
 	int i;
 	Solution solutionList[N_PASSWORDS]; 
 	Password passwordList[N_PASSWORDS];
-    MPI_Request request[];//TODO array with number of elements equal to the number of process
-    MPI_Status status;
 
 	//reset the solutionList and passwordList
 	memset(solutionList,0,N_PASSWORDS*sizeof(Solution));
@@ -53,19 +51,14 @@ void communicationTask(){
 
 		strcpy(passwordList[i].encrypted, crypt(passwordList[i].decrypted,salt));
 
-        //buffer de datos,numero de elementos del buffer,tipo dato de los elementos,id destino,etiqueta dle mensaje,manejadora de la comunicación,manejadora de la peticion
-        MPI_Isend(passwordList[i].encrypted,sizeof(passwordList[i].encrypted,MPI_INT,i,i,MPI_COMM_WORLD,request[i]));
-        //send the password to a process (temporary the i process)
+		//send the password to a process (temporary the i process)
 
 		LOG("\n[ID:%d][Generated] %s Salt %s -> Encrypted %s -> send to %d",ID,passwordList[i].decrypted,salt,passwordList[i].decrypted,i);
 	}
 
 	//wait for all password except one
 	for(i=0; i < N_PASSWORDS-1; i++){
-		//blocking recv --> NOTE: for future work the main task should go to calculate each time it gives a password
-        //TODO the comment before it's not the best solution due to if you are blocked waiting a child, you can't receive another messages
-        MPI_Irecv(solutionList[i].p.decrypted,sizeof(solutionList[i].p.decrypted),MPI_INT,i,i,MPI_COMM_WORLD,request[i]);
-        MPI_Wait(request[i],&status);
+		//blocking recv --> NOTE: for future work the main task should go to calculate each time it gives a password 
 
 		LOG("\n[ID:%d][Recived] %s -> Encrypted %s -> recived by %d in %d tries",ID,solutionList[i].p.decrypted,solutionList[i].p.decrypted,solutionList[i].id, solutionList[i].ntries);
 	}
@@ -83,7 +76,7 @@ void communicationTask(){
 
 }
 
-//same as calculation task, but with checking of messages and password as parameter
+//same as calculation task, but with cheking of messages and password as parameter
 void communicationAndCalculationTask(Password p){
 	long ntries;
 	bool solutionFound;
@@ -121,11 +114,8 @@ void calculationTask(){
 	long ntries;
 	bool solutionFound;
 	Salt salt;
-    MPI_Request request;
-    char *buffer;
 
 	//Wait to the fahter password
-     MPI_Recv(p.encrypted,sizeof(p.decrypted),MPI_CHAR,getId(),getId(),MPI_COMM_WORLD,&request);
 
 
 	//obtain the salt
@@ -144,9 +134,6 @@ void calculationTask(){
 
 		//Non-blocking check if Master has ordered to stop (our password has been taken by master and decrypted)
 		//	Note: if a message is recived, make an MPI_EXIT(EXIT_SUCCED)
-        if(MPI_Irecv(buffer,sizeof(buffer),MPI_CHAR,getId(),getId(),MPI_COMM_WORLD,&request)){
-            MPI_EXIT(EXIT_SUCCED);
-        }
 
 	};
 
@@ -156,7 +143,6 @@ void calculationTask(){
 	memcpy(&(s.p),&p,sizeof(Password));
 
 	//send father process the possible solution
-     MPI_Isend(p.decrypted,sizeof(p.decrypted),MPI_CHAR,/*TODO necesario identificar al padre*/,/*Same thing*/,MPI_COMM_WORLD,&request);
 
 }
 
