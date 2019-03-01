@@ -1,4 +1,4 @@
-N_PROCESS=1
+N_PROCESS=8
 
 
 run: decrypt

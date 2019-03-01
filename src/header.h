@@ -15,21 +15,9 @@
 #define FALSE 0
 
 #define PASSWORD_SIZE (20)
-#define SALT_SIZE (3)
+#define SALT_SIZE (2)
 
-#define MAX_TASKS (4)
-
-#define TAG_SIZE 100
-
-//Message related constants (labels)
-//order to decode a password
-#define DECODE_REQUEST (1)
-//response with the password decoded
-#define DECODE_RESPONSE (2)
-//stop decoding and go to recive a message
-#define DECODE_STOP (3)
-//finalize calculation and die
-#define FINALIZE (4)          
+#define N_PASSWORDS (4)
 
 //Data definition
 typedef unsigned short bool;
@@ -37,37 +25,17 @@ typedef unsigned short bool;
 typedef char Salt [SALT_SIZE];
 typedef char * SaltPointer;
 
-typedef int PasswordID, TaskID, MessageTag;
-
-//NOTA
-//
-//      SI ALGUIEN TOCA EL ORDEN, NOMBRE, POSICION, .... DE ALGUNA ESTRUCTURA, LO MATO
-//          SI ALGUIEN CAMBIA ALGO DE LAS ESTRUCTURAS SIN CAMBIARLO LO MATO
-//                  SI CAMBIAS ALGO DISELO A FRAN, O SUFRIRAS LAS CONSECUENCIAS
-
 typedef struct{
-    PasswordID passwordId;
 	char decrypted[PASSWORD_SIZE];
 	char encrypted[PASSWORD_SIZE];
 }Password;
 
 typedef struct{
-    //here goes the range to find random numbers if neccesary
-    bool finished;
-    Password p;
-}Request;
-
-typedef struct{
+	int id;
 	int ntries;
 	Password p;
-    TaskID taskId;
-}Response;
+}Solution;
 
-//created only to associate which task is doing which request
-typedef struct{
-    TaskID taskId;
-    PasswordID passwordId;
-}Work;
 
 //define error messages
 #define USAGE_ERROR "./decrypt <encripted data (size = 9)>"
@@ -76,14 +44,6 @@ typedef struct{
 #define ID ( getId() )
 #define MASTER_ID ( 0 )
 #define IS_MASTER(id) ( (id) == (MASTER_ID) )
-
-//task management
-#define NTASKS ( getNtasks() )
-
-//data types
-#define MPI_REQUEST_STRUCT (getMPI_REQUEST_STRUCT())
-#define MPI_RESPONSE_STRUCT (getMPI_RESPONSE_STRUCT())
-#define MPI_PASSWORD_STRUCT (getMPI_PASSWORD_STRUCT())
 
 //Random number generation
 #define MAX_RAND ( 100000000 )
@@ -98,23 +58,12 @@ typedef struct{
 		sprintf(str,"%08d",GET_RANDOM_IN_BOUNDS(a,b));	\
 	}while(0)
 
-#define GET_SALT(encrypted, salt)   \
-    do{                             \
-        strncpy(salt,encrypted,2);  \
-    }while(0)
-
-#define ENCRYPT(src, dest, salt)    \
-    do{                             \
-        strcpy(dest,src);           \
-        crypt(dest,salt);           \
-    }while(0)
-
 //Error and log management
-#define MPI_EXIT(code)                     \
-    do{	                                   \
-		LOG("\n[ID:%d] Finalized",ID);     \
-    	MPI_Finalize();                    \
-    	exit(code);                        \
+#define MPI_EXIT(code) 				\
+    do{								\
+		LOG("\n[ID:%d] Ended",ID);	\
+    	MPI_Finalize();				\
+    	exit(code);					\
     }while(0)
 
 #define LOG(str, ...)                           \
@@ -134,13 +83,6 @@ typedef struct{
 
 //Utils
 #define IS_EQUAL_TO_STRING(str1,str2) (strcmp(str1,str2)==0)
-
-#define MESSAGE_TAG_TOSTRING(msgtag)                        \
-    ( ( msgtag == DECODE_REQUEST  ) ? ("DECODE_REQUEST")  : \
-    ( ( msgtag == DECODE_RESPONSE ) ? ("DECODE_RESPONSE") : \
-    ( ( msgtag == DECODE_STOP     ) ? ("DECODE_STOP")     : \
-    ( ( msgtag == FINALIZE        ) ? ("FINALIZE")        : \
-    ( "UNKNOWN" ) ))))
 
 //Delete when finished
 #define DEBUG_LINE LOG("\n[%s:%d:%s]", __FILE__, __LINE__, __FUNCTION__);
