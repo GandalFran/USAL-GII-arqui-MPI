@@ -90,8 +90,10 @@ typedef struct{
 #define GET_RANDOM ( rand() ) 
 #define GET_RANDOM_IN_BOUNDS(a,b)  ( (a) + ( GET_RANDOM % ((b)-(a)) ) )
 
-//NOTE: ITS NEED TO GENERATE THE SALT, HERE IS HARDCODED
-#define GET_RANDMON_SALT(salt) strcpy(salt,"aa");
+#define GET_RANDMON_SALT(salt)                                                              \
+    do{                                                                                     \
+        sprintf(salt,"%d%d",GET_RANDOM_IN_BOUNDS('a','z'),GET_RANDOM_IN_BOUNDS('a','z'));   \
+    }while(0)
 
 #define GET_RANDOM_STR_IN_BOUNDS(str,a,b)				\
 	do{													\
