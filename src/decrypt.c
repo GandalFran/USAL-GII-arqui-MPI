@@ -7,7 +7,7 @@ void calculationTask();
 void masterCalculationTask();
 
 //Calculus definition
-bool doCalculus(Password * p, SaltPointer salt);
+bool doCalculus(Password p, SaltPointer salt);
 
 //task division
 void doTaskDivision(Request * requestList, Work * taskSituation);
@@ -16,9 +16,9 @@ void doTaskDivision(Request * requestList, Work * taskSituation);
 int getId();
 int getNtasks();
 
-MPI_Datatype getMPI_Password();
-MPI_Datatype getMPI_Request();
-MPI_Datatype getMPI_Response();
+MPI_Datatype getMPI_PASSWORD_STRUCT();
+MPI_Datatype getMPI_REQUEST_STRUCT();
+MPI_Datatype getMPI_RESPONSE_STRUCT();
 
 bool areThereAnyMsg();
 void send(TaskID destinationAddr, void * data, int nElements, MPI_Datatype tipo_datos, MessageTag tag);
@@ -68,7 +68,6 @@ void communicationTask(){
 	memset(requestList,0,MAX_TASKS*sizeof(Request));
 	memset(taskSituation,0,MAX_TASKS*sizeof(Work));
 
-
 	//generate passwords
 	for(i=0; i<NTASKS; i++){
 		requestList[i].p.passwordId = i;
@@ -89,7 +88,7 @@ void communicationTask(){
 		masterCalculationTask();
 
 		//recv	
-		recv(MPI_ANY_SOURCE, &resTmp, 1, MPI_RESPONSE, DECODE_RESPONSE);
+		recv(MPI_ANY_SOURCE, &resTmp, 1, MPI_RESPONSE_STRUCT, DECODE_RESPONSE);
 
 		//-----response gestion------
 		LOG("\n[ID %d][Recived response] %s",ID,responseToString(resTmp));
@@ -101,7 +100,7 @@ void communicationTask(){
 		for(i =0; i< NTASKS; i++){
 			if( taskSituation[i].passwordId == resTmp.p.passwordId ){
 				//send a stop message
-				send(i, NADA , 1, NADA , DECODE_STOP);
+				send(i, NULL , 0, MPI_BYTE , DECODE_STOP);
 			}
 		}
 
@@ -111,7 +110,7 @@ void communicationTask(){
 
 	//finalize all tasks
 	for(i=0; i< NTASKS; i++){
-		send(i, NADA , 1, NADA , FINALIZE);
+		send(i, NULL , 0, MPI_BYTE , FINALIZE);
 	}
 
 }
@@ -127,10 +126,9 @@ void calculationTask(){
 	response.taskId = ID;
 
 	do{
-
 		//Reset the request and wait to password request or finalize
 		memset(&request,0,sizeof(Request));
-		recv(MASTER_ID, &request, 1, MPI_REQUEST, DECODE_REQUEST);
+		recv(MASTER_ID, &request, 1, MPI_REQUEST_STRUCT, DECODE_REQUEST);
 
 		//obtain the salt
 		GET_SALT(salt,request.p.encrypted);
@@ -140,13 +138,13 @@ void calculationTask(){
 			response.ntries++;
 
 			//do the calculus and then check if the solution has been found
-			if(doCalculus(&(request.p),salt)){
+			if(doCalculus(request.p,salt)){
 				//fill the response
 				memcpy(&(response.p),&(request.p),sizeof(Password));
 				LOG("\n[ID %d][Solution found] %s",ID,responseToString(response));
 				
 				//send
-				send(MASTER_ID, &response, 1, MPI_RESPONSE, DECODE_RESPONSE);
+				send(MASTER_ID, &response, 1, MPI_RESPONSE_STRUCT, DECODE_RESPONSE);
 
 				//go to the external loop
 				break;
@@ -156,7 +154,7 @@ void calculationTask(){
 			if(areThereAnyMsg()){
 				//recv message to discard it --> it is only a order to finalize or change task
 				//pbolem -> the message could be a finalize or a decode_stop, and the message is void
-				recv(MASTER_ID, NADA, 1, NADA , MPI_ANY_TAG);
+				recv(MASTER_ID, NULL, 0, MPI_BYTE , MPI_ANY_TAG);
 				break;
 			}
 
@@ -176,7 +174,9 @@ void masterCalculationTask(){
 
 	//Reset the request and wait to password request or finalize
 	memset(&request,0,sizeof(Request));
-	recv(MASTER_ID, &request, 1, MPI_REQUEST, DECODE_REQUEST);
+	recv(MASTER_ID, &request, 1, MPI_REQUEST_STRUCT, DECODE_REQUEST);
+
+	LOG("\nasdfasdfasd %s",passwordToString(request.p));
 
 	//obtain the salt
 	GET_SALT(salt,request.p.encrypted);
@@ -186,13 +186,13 @@ void masterCalculationTask(){
 		response.ntries++;
 
 		//do the calculus and then check if the solution has been found
-		if(doCalculus(&(request.p),salt)){
+		if(doCalculus(request.p,salt)){
 			//fill the response
 			memcpy(&(response.p),&(request.p),sizeof(Password));
 			LOG("\n[ID %d][Solution found] %s",ID,responseToString(response));
 
 			//send
-			send(MASTER_ID, &response, 1, MPI_RESPONSE, DECODE_RESPONSE);
+			send(MASTER_ID, &response, 1, MPI_RESPONSE_STRUCT, DECODE_RESPONSE);
 
 			//finalize the decoding 
 			break;
@@ -208,19 +208,23 @@ void masterCalculationTask(){
 
 // -------------------------------- Calculus definition --------------------------------
 
-bool doCalculus(Password * p, SaltPointer salt){
-	char possibleSolution[PASSWORD_SIZE], *possibleSolutionEncripted = NULL;
+bool doCalculus(Password p, SaltPointer salt){
+	char possibleSolution[PASSWORD_SIZE], possibleSolutionEncripted[PASSWORD_SIZE];
 
-	//generate and encript possible solution
+	//generate and encrypt possible solution
 	GET_RANDOM_STR_IN_BOUNDS(possibleSolution,0,MAX_RAND);
-	possibleSolutionEncripted = crypt(possibleSolution,salt);
+	ENCRYPT(possibleSolution, possibleSolutionEncripted, salt);
+
+	LOG("\n %s",passwordToString(p));
+	LOG("\n[ID %d][Calculus] original: %s generated: %s generatedEncrypted: %s",ID,p.encrypted,possibleSolution,possibleSolutionEncripted);
 
 	//check if is the possible solution is equal to the encripted data
-	if ( IS_EQUAL_TO_STRING(possibleSolutionEncripted,p->encrypted) )
+	if ( IS_EQUAL_TO_STRING(possibleSolutionEncripted,p.encrypted) )
 	{
-		strcpy(p->decrypted,possibleSolution);
+		strcpy(p.decrypted,possibleSolution);
 		return TRUE;
 	}
+
 	return FALSE;
 }
 
@@ -234,7 +238,7 @@ void doTaskDivision(Request * requestList, Work * taskSituation){
 	for(i=0; i<NTASKS; i++){
 		if(!requestList[i].finished){
 			//send message to main task 
-			send(MASTER_ID, &requestList[i], 1, MPI_REQUEST, DECODE_REQUEST);
+			send(MASTER_ID, &requestList[i], 1, MPI_REQUEST_STRUCT, DECODE_REQUEST);
 			return;
 		}
 	}
@@ -269,14 +273,15 @@ bool areThereAnyMsg(){
 	MPI_Status status;
 
 	MPI_Iprobe( MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &result, &status);
-	LOG("\n[ID %d][check mail] %s", ID, (result == 0) ? "yes mail" : "no mail" );
+	//LOG("\n[ID %d][check mail] %s", ID, (result != 0) ? "yes mail" : "no mail" );
 
 	return (result != 0) ? TRUE : FALSE;
 }
 
 void send(TaskID destinationAddr, void * data, int nElements, MPI_Datatype tipo_datos, MessageTag tag){
+	MPI_Request req;
 	LOG("\n[ID %d][Send] Destination: %d, type:%s", ID, destinationAddr, MESSAGE_TAG_TOSTRING(tag));
-	MPI_Send(data, nElements, tipo_datos, destinationAddr, tag, MPI_COMM_WORLD);
+	MPI_Isend(data, nElements, tipo_datos, destinationAddr, tag, MPI_COMM_WORLD, &req);
 }
 
 void recv(TaskID destinationAddr, void * data, int nElements, MPI_Datatype tipo_datos, MessageTag tag){
@@ -286,7 +291,7 @@ void recv(TaskID destinationAddr, void * data, int nElements, MPI_Datatype tipo_
 }
 
 //define the data types
-MPI_Datatype getMPI_Password(){
+MPI_Datatype getMPI_PASSWORD_STRUCT(){
 	static bool firstBuild = FALSE;
 	static MPI_Datatype dataType;
 	
@@ -324,7 +329,7 @@ MPI_Datatype getMPI_Password(){
 	return dataType;
 }
 
-MPI_Datatype getMPI_Request(){
+MPI_Datatype getMPI_REQUEST_STRUCT(){
 	static bool firstBuild = FALSE;
 	static MPI_Datatype dataType;
 	
@@ -337,7 +342,7 @@ MPI_Datatype getMPI_Request(){
 	if(!firstBuild){
 
 		types[0] = MPI_UNSIGNED_SHORT; 
-		types[1] = MPI_PASSWORD;
+		types[1] = MPI_PASSWORD_STRUCT;
 
 		size[0] = 1;
 		size[1] = 1;
@@ -358,7 +363,7 @@ MPI_Datatype getMPI_Request(){
 	return dataType;
 }
 
-MPI_Datatype getMPI_Response(){
+MPI_Datatype getMPI_RESPONSE_STRUCT(){
 	static bool firstBuild = FALSE;
 	static MPI_Datatype dataType;
 	
@@ -371,7 +376,7 @@ MPI_Datatype getMPI_Response(){
 	if(!firstBuild){
 
 		types[0] = MPI_INT; 
-		types[1] = MPI_PASSWORD;
+		types[1] = MPI_PASSWORD_STRUCT;
 		types[2] = MPI_INT;
 
 		size[0] = 1;

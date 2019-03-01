@@ -15,7 +15,7 @@
 #define FALSE 0
 
 #define PASSWORD_SIZE (20)
-#define SALT_SIZE (2)
+#define SALT_SIZE (3)
 
 #define MAX_TASKS (4)
 
@@ -81,9 +81,9 @@ typedef struct{
 #define NTASKS ( getNtasks() )
 
 //data types
-#define MPI_REQUEST (getMPI_Request())
-#define MPI_RESPONSE (getMPI_Response())
-#define MPI_PASSWORD (getMPI_Password())
+#define MPI_REQUEST_STRUCT (getMPI_REQUEST_STRUCT())
+#define MPI_RESPONSE_STRUCT (getMPI_RESPONSE_STRUCT())
+#define MPI_PASSWORD_STRUCT (getMPI_PASSWORD_STRUCT())
 
 //Random number generation
 #define MAX_RAND ( 100000000 )
@@ -101,6 +101,12 @@ typedef struct{
 #define GET_SALT(encrypted, salt)   \
     do{                             \
         strncpy(salt,encrypted,2);  \
+    }while(0)
+
+#define ENCRYPT(src, dest, salt)    \
+    do{                             \
+        strcpy(dest,src);           \
+        crypt(dest,salt);           \
     }while(0)
 
 //Error and log management
