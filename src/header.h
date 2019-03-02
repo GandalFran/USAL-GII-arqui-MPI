@@ -26,7 +26,7 @@
 typedef unsigned short bool;
 typedef char Salt [SALT_SIZE];
 typedef int PasswordID, TaskID;
-typedef enum{DECODE_REQUEST=1,DECODE_RESPONSE,DECODE_STOP,FINALIZE,UNKNOWN} MessageTag;
+typedef enum{DECODE_REQUEST=10,DECODE_RESPONSE=11,DECODE_STOP=12,FINALIZE=13,UNKNOWN=14} MessageTag;
 
 //NOTA
 //
@@ -112,14 +112,17 @@ typedef struct{
         fflush(stderr);							\
     }while(0)
 
-#define EXIT_ON_WRONG_VALUE(wrongValue,returnValue,str, ...)  \
-    do{                                         \
-        if((returnValue) == (wrongValue)){      \
-            LOG(str,##__VA_ARGS__);             \
-            MPI_EXIT(EXIT_FAILURE);             \
-        }                                       \
+#define EXIT_ON_FAILURE(returnValue)                                                                                \
+    do{                                                                                                             \
+        int tagsize;                                                                                                \
+        char errortag[TAG_SIZE];                                                                                    \
+        int code = (returnValue);                                                                                   \
+        if(code != (MPI_SUCCESS)){                                                                                  \
+            MPI_Error_string(code, errortag, &tagsize);                                                             \
+            LOG("\n[ID %d][ERROR %d][%s:%d:%s] %s", ID, code, __FILE__, __LINE__, __FUNCTION__, errortag);     \
+            MPI_EXIT(EXIT_FAILURE);                                                                                 \
+        }                                                                                                           \
     }while(0)
-
 
 //Utils
 #define IS_EQUAL_TO_STRING(str1,str2) (strcmp(str1,str2)==0)
