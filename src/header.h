@@ -35,7 +35,6 @@
 typedef unsigned short bool;
 
 typedef char Salt [SALT_SIZE];
-typedef char * SaltPointer;
 
 typedef int PasswordID, TaskID, MessageTag;
 
@@ -46,6 +45,7 @@ typedef int PasswordID, TaskID, MessageTag;
 //                  SI CAMBIAS ALGO DISELO A FRAN, O SUFRIRAS LAS CONSECUENCIAS
 
 typedef struct{
+    Salt s;
     PasswordID passwordId;
 	char decrypted[PASSWORD_SIZE];
 	char encrypted[PASSWORD_SIZE];
@@ -92,18 +92,13 @@ typedef struct{
 
 #define GET_RANDMON_SALT(salt)                                                              \
     do{                                                                                     \
-        sprintf(salt,"%d%d",GET_RANDOM_IN_BOUNDS('a','z'),GET_RANDOM_IN_BOUNDS('a','z'));   \
+        sprintf(salt,"%c%c",GET_RANDOM_IN_BOUNDS('a','z'),GET_RANDOM_IN_BOUNDS('a','z'));   \
     }while(0)
 
 #define GET_RANDOM_STR_IN_BOUNDS(str,a,b)				\
 	do{													\
 		sprintf(str,"%08d",GET_RANDOM_IN_BOUNDS(a,b));	\
 	}while(0)
-
-#define GET_SALT(encrypted, salt)   \
-    do{                             \
-        strncpy(salt,encrypted,2);  \
-    }while(0)
 
 #define ENCRYPT(src, dest, salt)    \
     do{                             \

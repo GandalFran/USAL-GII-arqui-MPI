@@ -1,6 +1,5 @@
 N_PROCESS=1
 
-
 run: decrypt
 	mpiexec -np $(N_PROCESS) ./decrypt aaTrgM6tVLhas
 
