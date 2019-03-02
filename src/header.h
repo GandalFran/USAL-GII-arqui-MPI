@@ -7,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <crypt.h>
+#include <time.h>
 #include <mpi.h>
 
 
@@ -21,22 +22,11 @@
 
 #define TAG_SIZE 100
 
-//Message related constants (labels)
-//order to decode a password
-#define DECODE_REQUEST (1)
-//response with the password decoded
-#define DECODE_RESPONSE (2)
-//stop decoding and go to recive a message
-#define DECODE_STOP (3)
-//finalize calculation and die
-#define FINALIZE (4)          
-
 //Data definition
 typedef unsigned short bool;
-
 typedef char Salt [SALT_SIZE];
-
-typedef int PasswordID, TaskID, MessageTag;
+typedef int PasswordID, TaskID;
+typedef enum{DECODE_REQUEST=1,DECODE_RESPONSE,DECODE_STOP,FINALIZE,UNKNOWN} MessageTag;
 
 //NOTA
 //
@@ -102,21 +92,23 @@ typedef struct{
 
 #define ENCRYPT(src, dest, salt)    \
     do{                             \
+        char * tag;                 \
         strcpy(dest,src);           \
-        crypt(dest,salt);           \
+        tag = crypt(dest,salt);     \
+        strcpy(dest,tag);           \
     }while(0)
 
 //Error and log management
 #define MPI_EXIT(code)                     \
     do{	                                   \
-		LOG("\n[ID:%d] Finalized",ID);     \
+		LOG("\n[ID:%d][Finalized]",ID);    \
     	MPI_Finalize();                    \
     	exit(code);                        \
     }while(0)
 
 #define LOG(str, ...)                           \
     do{                                         \
-        fprintf(stderr, str, ##__VA_ARGS__);	\
+        fprintf(stderr, str, ##__VA_ARGS__);    \
         fflush(stderr);							\
     }while(0)
 
@@ -131,13 +123,6 @@ typedef struct{
 
 //Utils
 #define IS_EQUAL_TO_STRING(str1,str2) (strcmp(str1,str2)==0)
-
-#define MESSAGE_TAG_TOSTRING(msgtag)                        \
-    ( ( msgtag == DECODE_REQUEST  ) ? ("DECODE_REQUEST")  : \
-    ( ( msgtag == DECODE_RESPONSE ) ? ("DECODE_RESPONSE") : \
-    ( ( msgtag == DECODE_STOP     ) ? ("DECODE_STOP")     : \
-    ( ( msgtag == FINALIZE        ) ? ("FINALIZE")        : \
-    ( "UNKNOWN" ) ))))
 
 //Delete when finished
 #define DEBUG_LINE LOG("\n[%s:%d:%s]", __FILE__, __LINE__, __FUNCTION__);

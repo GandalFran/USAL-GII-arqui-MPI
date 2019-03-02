@@ -1,7 +1,7 @@
-N_PROCESS=1
+N_PROCESS=4
 
 run: decrypt
-	mpiexec -np $(N_PROCESS) ./decrypt aaTrgM6tVLhas
+	mpiexec -np $(N_PROCESS) ./decrypt
 
 decrypt: decrypt.c header.h
-	mpicc decrypt.c -o decrypt -lcrypt
+	mpicc decrypt.c -o decrypt -lcrypt 
