@@ -1,4 +1,4 @@
-N_PROCESS=3
+N_PROCESS=4
 
 run: decrypt
 	mpiexec -np $(N_PROCESS) ./decrypt

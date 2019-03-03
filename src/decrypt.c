@@ -37,13 +37,14 @@ void logToFile(char * toLog);
 // -------------------------------- Main --------------------------------
 
 int main (int argc, char * argv[]){
-	//give the random seed
-	srand(time(NULL));
 
 	//initialize the MPI
 	MPI_Init(&argc, &argv);
 	MPI_Errhandler_set(MPI_COMM_WORLD, MPI_ERRORS_RETURN); 
 	LOG("\n[ID:%d][%d] Started",ID,getpid());
+
+	//give the random seed 
+	srand(ID + time(NULL));
 
 	//Taking each one to his role
 	if(IS_MASTER(ID)){
@@ -89,39 +90,35 @@ void communicationTask(){
 
 	for(solvedTasks = 0; solvedTasks < NTASKS; solvedTasks++){
 		//Division of tasks
-//QUITAR CUANDO TERMINADO
-		if(solvedTasks == 0)
-			calculusToMaster = doTaskDivision(requestList,taskSituation);
-
-		//go to the calculation -> there a REQUEST for calculus will be recived
+		calculusToMaster = doTaskDivision(requestList,taskSituation);
 		solvedByMe = masterCalculationTask(requestList[calculusToMaster],&resTmp);
 
-		do{
-			if(!solvedByMe)
-				recv(MPI_ANY_SOURCE, &resTmp, MPI_RESPONSE_STRUCT, DECODE_RESPONSE);
+		if(!solvedByMe)
+			recv(MPI_ANY_SOURCE, &resTmp, MPI_RESPONSE_STRUCT, DECODE_RESPONSE);
 
-			//-----response gestion------
-			LOG("\n[ID %d][Recived response] %s",ID,responseToString(resTmp));
+		//-----response gestion------
 
-			//mark password as solved
-			requestList[resTmp.p.passwordId].finished = TRUE;
+		//mark password as solved
+		requestList[resTmp.p.passwordId].finished = TRUE;
 
-			//advise all tasks that are solving this password, to stop
-			for(i =0; i< NTASKS; i++){
-				if( taskSituation[i].passwordId == resTmp.p.passwordId && taskSituation[i].passwordId != MASTER_ID){
-					//send a stop message
-					send(i, NULL, MPI_BYTE , DECODE_STOP);
-				}
+		//advise all tasks that are solving this password, to stop
+		for(i =0; i< NTASKS; i++){
+			if( taskSituation[i].passwordId == resTmp.p.passwordId && taskSituation[i].passwordId != resTmp.taskId){
+				//send a stop message to stop all tasks, except the one which has solved the request 
+				send(i, NULL, MPI_DATATYPE_NULL , DECODE_STOP);
 			}
+		}
 
-			//if neccesary save here the response, to do statistics before
+		//if neccesary save here the response, to do statistics before
 
-		}while(areThereAnyMsg());
+		LOG("\n[ID %d] Ended iteration %d/%d in main loop",ID,solvedTasks,NTASKS-1);
 	}
+
+	LOG("\nEnd loop");
 
 	//finalize all tasks
 	for(i=1; i< NTASKS; i++){
-		send(i, NULL , MPI_BYTE , FINALIZE);
+		send(i, NULL , MPI_DATATYPE_NULL , FINALIZE);
 	}
 
 }
@@ -161,7 +158,7 @@ void calculationTask(){
 			if(areThereAnyMsg()){
 				//recv message to discard it --> it is only a order to finalize or change task
 				//pbolem -> the message could be a finalize or a decode_stop, and the message is void
-				recv(MASTER_ID, NULL, MPI_BYTE , MPI_ANY_TAG);
+				recv(MASTER_ID, NULL, MPI_DATATYPE_NULL , MPI_ANY_TAG);
 				break;
 			}
 
@@ -176,7 +173,6 @@ bool masterCalculationTask(Request request, Response * response){
 	response->taskId = ID;
 
 	do{
-		LOG("\n start of cicle %d", response->ntries+1);
 		//increment the try number
 		(response->ntries)++;
 
@@ -195,7 +191,6 @@ bool masterCalculationTask(Request request, Response * response){
 			return FALSE;
 		}
 
-		LOG("\n end of cicle %d", response-> ntries);
 	}while(TRUE);
 }
 
@@ -203,12 +198,10 @@ bool masterCalculationTask(Request request, Response * response){
 
 bool doCalculus(Password * p){
 	char possibleSolution[PASSWORD_SIZE], possibleSolutionEncripted[PASSWORD_SIZE];
-//LOG("\n\t[ID %d] active",ID);
+
 	//generate and encrypt possible solution
 	GET_RANDOM_STR_IN_BOUNDS(possibleSolution,0,MAX_RAND);
 	ENCRYPT(possibleSolution, possibleSolutionEncripted, p->s);
-
-	LOG("\n[ID %d][Calculus] generated: %s generatedEncrypted: %s \n\toriginal: %s",ID,possibleSolution,possibleSolutionEncripted,passwordToString(*p));
 
 	//check if is the possible solution is equal to the encripted data
 	if ( IS_EQUAL_TO_STRING(possibleSolutionEncripted,p->encrypted) )
@@ -216,7 +209,6 @@ bool doCalculus(Password * p){
 		strcpy(p->decrypted,possibleSolution);
 		return TRUE;
 	}
-//LOG("\n\t[ID %d] end active",ID);
 	return FALSE;
 }
 
@@ -227,6 +219,10 @@ int doTaskDivision(Request * requestList, Work * taskSituation){
 	Request req;
 
 	//NOTE: for the moment, one task is sent to each agent 
+	static bool firstTime = TRUE;
+	if(!firstTime)
+		return 0;
+	firstTime = FALSE;
 
 	for(i=1; i<NTASKS; i++){
 		if(!requestList[i].finished){
@@ -239,7 +235,6 @@ int doTaskDivision(Request * requestList, Work * taskSituation){
 			taskSituation[i].passwordId = req.p.passwordId;
 		}
 	}
-
 	return 0;
 }
 
@@ -269,16 +264,7 @@ int getNtasks(){
 bool areThereAnyMsg(){
 	int result;
 	MPI_Status status;
-
-LOG("\n checking mail");
 	EXIT_ON_FAILURE(MPI_Iprobe( MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &result, &status));
-
-	if(result != 0)
-		LOG("\n[ID %d][mail check] yes from:%d type:%s",ID,status.MPI_SOURCE,messageTagToSring(status.MPI_TAG));
-	else
-		LOG("\n[ID %d][mail check] no from:%d type:%s",ID,status.MPI_SOURCE,messageTagToSring(status.MPI_TAG));
-
-
 	return (result != 0) ? TRUE : FALSE;
 }
 
