@@ -18,7 +18,10 @@
 #define PASSWORD_SIZE (20)
 #define SALT_SIZE (3)
 
-#define MAX_TASKS (4)
+#define MAX_TASKS (30)
+#define MAX_PASSWORDS (30)
+
+#define N_PASSWORDS ((NTASKS) + 1)
 
 #define TAG_SIZE 100
 
@@ -31,8 +34,8 @@ typedef enum{DECODE_REQUEST=10,DECODE_RESPONSE=11,DECODE_STOP=12,FINALIZE=13,UNK
 //NOTA
 //
 //      SI ALGUIEN TOCA EL ORDEN, NOMBRE, POSICION, .... DE ALGUNA ESTRUCTURA, LO MATO
-//          SI ALGUIEN CAMBIA ALGO DE LAS ESTRUCTURAS SIN CAMBIARLO LO MATO
-//                  SI CAMBIAS ALGO DISELO A FRAN, O SUFRIRAS LAS CONSECUENCIAS
+//          SI ALGUIEN CAMBIA ALGO DE LAS ESTRUCTURAS SIN DECIRLO LO MATO
+//           SI CAMBIAS ALGO DISELO A FRAN, O SUFRIRAS LAS CONSECUENCIAS
 
 typedef struct{
     Salt s;
@@ -42,22 +45,23 @@ typedef struct{
 }Password;
 
 typedef struct{
-    //here goes the range to find random numbers if neccesary
-    bool finished;
+    int rangeMin;
+    int rangeMax;
     Password p;
 }Request;
 
 typedef struct{
 	int ntries;
-	Password p;
     TaskID taskId;
+    Password p;
 }Response;
 
-//created only to associate which task is doing which request
 typedef struct{
-    TaskID taskId;
     PasswordID passwordId;
-}Work;
+    bool finished;
+    int lastAssigned;   //index of last cell of taskIds  
+    TaskID taskIds[MAX_TASKS];
+}PasswordStatus;
 
 //define error messages
 #define USAGE_ERROR "./decrypt <encripted data (size = 9)>"
