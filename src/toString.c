@@ -13,7 +13,7 @@ char * requestToString(Request req){
 	static char tag[TAG_SIZE];
 
 	memset(tag,0,TAG_SIZE);
-	sprintf(tag,"Request{rangeMin:%d, rangeMax:%d, passwordId:%d }",req.rangeMin,req.rangeMax,req.p.passwordId);
+	sprintf(tag,"Request{rangeMin:%d, rangeMax:%d, password:%s }",req.rangeMin,req.rangeMax,passwordToString(req.p));
 
 	return tag;
 }
@@ -32,10 +32,9 @@ char * passwordStatusToString(PasswordStatus ps){
 	static char tag[TAG_SIZE];
 
 	memset(tag,0,TAG_SIZE);
-	sprintf(tag,"PasswordStatus{id:%d, finished:%d, lastAssigned:%d, taskIds:TaskID[",ps.passwordId,ps.finished,ps.lastAssigned);
-	for(i=0; i<=ps.lastAssigned; i++)
-		sprintf(tag,"%s%d, ",tag,ps.taskIds[i]);
-	sprintf(tag,"%s]}",tag);
+	sprintf(tag,"PasswordStatus{id:%d, finished:%d, numTasksDecrypting:%d, taskIds:TaskID[",ps.passwordId,ps.finished,ps.numTasksDecrypting);
+	for(i=0; i<ps.numTasksDecrypting; i++) sprintf(tag,"%s%d, ",tag,ps.taskIds[i]);
+	sprintf(tag,"%s\b\b]}",tag);
 
 	return tag;
 }

@@ -33,9 +33,9 @@ typedef struct{
 }Response;
 
 typedef struct{
-    PasswordID passwordId;
     bool finished;
-    int lastAssigned;
+    PasswordID passwordId;
+    int numTasksDecrypting;
     TaskID taskIds[MAX_TASKS];
 }PasswordStatus;
 #endif

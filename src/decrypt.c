@@ -65,7 +65,7 @@ void masterCommunicationBehaviour(){
 
 	for(i=0; i<MAX_PASSWORDS; i++){
 		passwordStatusList[i].passwordId = i;
-		passwordStatusList[i].lastAssigned = -1;
+		passwordStatusList[i].numTasksDecrypting = 0;
 		passwordStatusList[i].finished = FALSE;
 	}
 
@@ -91,7 +91,7 @@ void masterCommunicationBehaviour(){
 				taskAssignation(i,passwordList,passwordStatusList, &reqToMaster);
 			}
 		}else{
-			for(i=0; i<=passwordStatusList[lastSolvedPasswordId].lastAssigned; i++){
+			for(i=0; i<passwordStatusList[lastSolvedPasswordId].numTasksDecrypting; i++){
 				taskAssignation(passwordStatusList[lastSolvedPasswordId].taskIds[i],passwordList,passwordStatusList, &reqToMaster);
 			}
 		}
@@ -136,7 +136,7 @@ void taskAssignation(TaskID task,Password * passwordList, PasswordStatus * passw
 	//check if a password is not assigned, and in that case, the password is assigned
 	for(i=0; i< N_PASSWORDS; i++){
 		//the initial value of lastAssigned is -1, because there are no processes decoding
-		if(-1 == passwordStatusList[i].lastAssigned){
+		if( NO_TASKS_WORKING_IN_PASSWORD(passwordStatusList[i].numTasksDecrypting) ){
 			//fill the request structure
 			req.rangeMin = 0;
 			req.rangeMax = MAX_RAND;
@@ -144,8 +144,8 @@ void taskAssignation(TaskID task,Password * passwordList, PasswordStatus * passw
 			memset(req.p.decrypted,0,PASSWORD_SIZE);
 
 			//save the new password status
-			(passwordStatusList[i].lastAssigned)++;
-			passwordStatusList[i].taskIds[passwordStatusList[i].lastAssigned] = task;
+			passwordStatusList[i].taskIds[passwordStatusList[i].numTasksDecrypting] = task;
+			(passwordStatusList[i].numTasksDecrypting)++;
 
 			//send the message to task if is not for master
 			if( IS_MASTER(task) )
@@ -163,11 +163,11 @@ void taskAssignation(TaskID task,Password * passwordList, PasswordStatus * passw
 		if(FALSE == passwordStatusList[i].finished){
 
 			//save the new password status
-			(passwordStatusList[i].lastAssigned)++;
-			passwordStatusList[i].taskIds[passwordStatusList[i].lastAssigned] = task;
+			passwordStatusList[i].taskIds[passwordStatusList[i].numTasksDecrypting] = task;
+			(passwordStatusList[i].numTasksDecrypting)++;
 
 			//calculate the range increments
-			rangeIncrement = (int) MAX_RAND / (passwordStatusList[i].lastAssigned + 1);
+			rangeIncrement = (int) MAX_RAND / passwordStatusList[i].numTasksDecrypting;
 
 			//fill the request structure
 			req.rangeMin = -1;
@@ -176,17 +176,14 @@ void taskAssignation(TaskID task,Password * passwordList, PasswordStatus * passw
 			memset(req.p.decrypted,0,PASSWORD_SIZE);
 
 			//Send the new requests
-			for(j=0; j<=passwordStatusList[i].lastAssigned; j++){
+			for(j=0; j<passwordStatusList[i].numTasksDecrypting; j++){
 
 				//refresh the ranges -> NOTE:if is the last assignement, the range limit is the maximum 
 				req.rangeMin = req.rangeMax + 1;
-				if(j == passwordStatusList[i].lastAssigned)
-					req.rangeMax = MAX_RAND;
-				else
-					req.rangeMax = req.rangeMin + rangeIncrement;
+				req.rangeMax = ( j == passwordStatusList[i].numTasksDecrypting-1 ) ? (MAX_RAND) : (req.rangeMin + rangeIncrement);
 
 				//send the request
-				if( IS_MASTER( passwordStatusList[i].taskIds[j]))
+				if( IS_MASTER(passwordStatusList[i].taskIds[j]) )
 					memcpy(masterReq,&req,sizeof(Request));
 				else
 					send( passwordStatusList[i].taskIds[j], &req, MPI_REQUEST_STRUCT(req), DECODE_REQUEST);
