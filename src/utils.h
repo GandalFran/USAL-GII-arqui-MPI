@@ -15,7 +15,7 @@
 #define MAX_TASKS (30)
 #define MAX_PASSWORDS (30)
 
-#define N_PASSWORDS (1)
+#define N_PASSWORDS (5)
 
 #define MAX_RAND (9999999)
 
