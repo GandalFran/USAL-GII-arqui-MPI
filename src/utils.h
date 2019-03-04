@@ -12,10 +12,12 @@
 #define TAG_SIZE (100)
 #define PASSWORD_SIZE (20)
 
+#define N_TASKS (MPITASKS)  //defined at the makefile
+#define N_PASSWORDS (5)     //defined here locally
+
 #define MAX_TASKS (30)
 #define MAX_PASSWORDS (30)
 
-#define N_PASSWORDS (5)
 
 #define MAX_RAND (9999999)
 

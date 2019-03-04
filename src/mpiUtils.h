@@ -8,7 +8,7 @@
 #include "dataDefinition.h"
 
 #define ID ( getId() )
-#define NTASKS ( getNtasks() )
+#define MPITASKS ( getNtasks() )
 
 #define MASTER_ID ( 0 )
 #define IS_MASTER(id) ( (id) == (MASTER_ID) )

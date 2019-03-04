@@ -76,7 +76,7 @@ void masterCommunicationBehaviour(){
 		firstAssignation[i] = i;
 	}
 
-	nTasksToAssign = NTASKS;
+	nTasksToAssign = N_TASKS;
 	lastSolvedPasswordId = -1;
 
 	//include the data of each process-> ID, computer, seed
@@ -117,7 +117,7 @@ void masterCommunicationBehaviour(){
 	}
 
 	//finalize all tasks
-	for(i=1; i< NTASKS; i++){
+	for(i=1; i< N_TASKS; i++){
 		send(i, NULL , MPI_DATATYPE_NULL , FINALIZE);
 	}
 
