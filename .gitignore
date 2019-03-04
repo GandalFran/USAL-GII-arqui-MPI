@@ -3,6 +3,7 @@
 *.ko
 *.obj
 *.elf
+decrypt
 
 # Precompiled Headers
 *.gch
@@ -30,5 +31,3 @@
 
 # Debug files
 *.dSYM/
-log.debug
-decrypt
