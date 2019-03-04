@@ -21,7 +21,7 @@
 #define MAX_TASKS (30)
 #define MAX_PASSWORDS (30)
 
-#define N_PASSWORDS ((NTASKS) + 1)
+#define N_PASSWORDS (NTASKS)
 
 #define TAG_SIZE 100
 
@@ -29,7 +29,7 @@
 typedef unsigned short bool;
 typedef char Salt [SALT_SIZE];
 typedef int PasswordID, TaskID;
-typedef enum{DECODE_REQUEST=10,DECODE_RESPONSE=11,DECODE_STOP=12,FINALIZE=13,UNKNOWN=14} MessageTag;
+typedef enum{DECODE_REQUEST=10,DECODE_RESPONSE=11,FINALIZE=13,UNKNOWN=14} MessageTag;
 
 //NOTA
 //
@@ -75,9 +75,9 @@ typedef struct{
 #define NTASKS ( getNtasks() )
 
 //data types
-#define MPI_REQUEST_STRUCT (getMPI_REQUEST_STRUCT())
-#define MPI_RESPONSE_STRUCT (getMPI_RESPONSE_STRUCT())
-#define MPI_PASSWORD_STRUCT (getMPI_PASSWORD_STRUCT())
+#define MPI_REQUEST_STRUCT(request) (getMPI_REQUEST_STRUCT(request))
+#define MPI_RESPONSE_STRUCT(response) (getMPI_RESPONSE_STRUCT(response))
+#define MPI_PASSWORD_STRUCT(password) (getMPI_PASSWORD_STRUCT(password))
 
 //Random number generation
 #define MAX_RAND ( 100000000 )
