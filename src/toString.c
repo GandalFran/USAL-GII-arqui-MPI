@@ -22,7 +22,7 @@ char * responseToString(Response res){
 	static char tag[TAG_SIZE];
 
 	memset(tag,0,TAG_SIZE);
-	sprintf(tag,"Response{id:%d, ntries: %d, password:%s }",res.taskId,res.ntries,passwordToString(res.p));
+	sprintf(tag,"Response{id:%d, ntries: %d, password:%s time:%ld}",res.taskId,res.ntries,passwordToString(res.p),res.time);
 
 	return tag;
 }

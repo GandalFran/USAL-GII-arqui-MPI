@@ -28,14 +28,20 @@ bool doCalculus(Password * p, int rangeMin, int rangeMax);
 // -------------------------------- Main --------------------------------
 
 int main (int argc, char * argv[]){
+	int seed;
 
 	//initialize the MPI
 	MPI_Init(&argc, &argv);
 	MPI_Errhandler_set(MPI_COMM_WORLD, MPI_ERRORS_RETURN); 
-	LOG("\n[ID %d][PID %d] Started",ID,getpid());
 
 	//give the random seed 
-	srand(ID + time(NULL));
+	srand( seed = (ID + time(NULL)) );
+
+	//log the initial process data
+	LOG("\n[ID %d][PID %d][PC: %s][SEED: %d] Started",ID,getpid(),"",seed);
+
+	//wait to all
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	//Taking each one to his role
 	if(IS_MASTER(ID)){
@@ -134,7 +140,7 @@ void responseGestion(PasswordStatus * passwordStatusList, Response * responseLis
 	passwordStatusList[passwordId].finished = TRUE;
 	memcpy(&(responseList[passwordId]),&res,sizeof(Response));
 
-	LOG("\n[ID %d] ID %d <- %s", ID, res.taskId, passwordStatusToString(passwordStatusList[passwordId]));
+	LOG("\n[ID %d] ID %d <- %s %s", ID, res.taskId, passwordStatusToString(passwordStatusList[passwordId]), responseToString(res));
 }
 
 void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passwordList, PasswordStatus * passwordStatusList, Request * masterReq){
@@ -209,10 +215,13 @@ void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passw
 
 
 bool masterCalculationBehaviour(Request request, Response * response){
+	double start;
 
 	//reset the response
 	memset(response,0,sizeof(Response));
 	response->taskId = ID;
+
+	start = MPI_Wtime();
 
 	//Loop until password solved or a new response recived
 	do{
@@ -222,6 +231,7 @@ bool masterCalculationBehaviour(Request request, Response * response){
 		//do the calculus and then check if the solution has been found
 		if(doCalculus(&(request.p),request.rangeMin,request.rangeMax)){
 			//fill the response
+			response->time = MPI_Wtime() - start;
 			memcpy(&(response->p),&(request.p),sizeof(Password));
 			//return TRUE, to know before, that the master has finished the task
 			return TRUE;
@@ -240,12 +250,15 @@ bool masterCalculationBehaviour(Request request, Response * response){
 void calculationBehaviour(){
 	Request request;
 	Response response;
+	double start;
 
 	do{
 		//Reset the request and response, and wait to password request
 		memset(&response,0,sizeof(Response));
 		memset(&request,0,sizeof(Request));
 		recv(MASTER_ID, &request, MPI_REQUEST_STRUCT(request), MPI_ANY_TAG);
+
+		start = MPI_Wtime();
 
 		//Loop until password solved or a new order recived
 		do{
@@ -256,6 +269,7 @@ void calculationBehaviour(){
 			if(doCalculus(&(request.p),request.rangeMin,request.rangeMax)){
 				//fill the response and send to master
 				response.taskId = ID;
+				response.time = MPI_Wtime() - start;
 				memcpy(&(response.p),&(request.p),sizeof(Password));
 				send(MASTER_ID, &response, MPI_RESPONSE_STRUCT(response), DECODE_RESPONSE);
 				//go to the external loop

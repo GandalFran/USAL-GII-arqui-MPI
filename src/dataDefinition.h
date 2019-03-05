@@ -28,6 +28,7 @@ typedef struct{
 
 typedef struct{
 	int ntries;
+    long time;
     TaskID taskId;
     Password p;
 }Response;
