@@ -35,6 +35,7 @@ typedef struct{
 
 typedef struct{
     bool finished;
+    TaskID solver;
     PasswordID passwordId;
     int numTasksDecrypting;
     TaskID taskIds[MAX_TASKS];

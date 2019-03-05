@@ -38,6 +38,7 @@
 
 int getId();
 int getNtasks();
+char * getProcessorName();
 
 bool areThereAnyMsg();
 void send(TaskID destinationAddr, void * data, MPI_Datatype tipo_datos, MessageTag tag);

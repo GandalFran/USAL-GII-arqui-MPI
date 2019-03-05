@@ -20,6 +20,19 @@ int getNtasks(){
 	return ntasks;
 }
 
+char * getProcessorName(){
+	static char name[TAG_SIZE];
+	static bool solved = FALSE;
+
+	if(!solved){
+		solved = TRUE;
+		int foo;
+		MPI_Get_processor_name(name,&foo);
+	}
+
+	return name;
+}
+
 //Wrap the send, recv, ... and more communication tasks
 bool areThereAnyMsg(){
 	int result;
