@@ -1,14 +1,15 @@
 #ifndef __MPIUTILS_H
 #define __MPIUTILS_H
 
-#include <mpi.h>
 #include <stdlib.h>
+#include <mpi.h>
 
 #include "utils.h"
 #include "dataDefinition.h"
 
 #define ID ( getId() )
 #define MPITASKS ( getNtasks() )
+#define PROC_NAME ( getProcName() )
 
 #define MASTER_ID ( 0 )
 #define IS_MASTER(id) ( (id) == (MASTER_ID) )
@@ -38,6 +39,8 @@
 
 int getId();
 int getNtasks();
+char * getProcName();
+double getTranscurredTime();
 
 bool areThereAnyMsg();
 void send(TaskID destinationAddr, void * data, MPI_Datatype tipo_datos, MessageTag tag);

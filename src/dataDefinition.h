@@ -27,7 +27,8 @@ typedef struct{
 }Request;
 
 typedef struct{
-	int ntries;
+    int ntries;
+    double time;
     TaskID taskId;
     Password p;
 }Response;

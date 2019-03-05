@@ -1,6 +1,5 @@
 #include "mpiUtils.h"
 
-//Wrap to only get the Id one time
 int getId(){
 	static int internalId = -1;
 
@@ -10,7 +9,6 @@ int getId(){
 	return internalId;
 }
 
-//Wrap to get the number of task one time
 int getNtasks(){
 	static int ntasks = -1;
 
@@ -18,6 +16,25 @@ int getNtasks(){
 		MPI_Comm_size(MPI_COMM_WORLD, &ntasks);
 	
 	return ntasks;
+}
+
+
+char * getProcName(){
+	static bool firstTime = FALSE;
+	static char procname[TAG_SIZE];
+
+	if(!firstTime){
+		int foo;
+		memset(procname,0,TAG_SIZE);
+		MPI_Get_processor_name(procname,&foo);
+		firstTime = TRUE;
+	}
+
+	return procname;
+}
+
+double getTime(){
+	return MPI_Wtime();
 }
 
 //Wrap the send, recv, ... and more communication tasks
@@ -136,29 +153,33 @@ MPI_Datatype getMPI_REQUEST_STRUCT(Request req){
 
 MPI_Datatype getMPI_RESPONSE_STRUCT(Response res){
 	MPI_Datatype dataType;
-	int size[3];
-	MPI_Aint shift[3];
-	MPI_Aint address[4];
-	MPI_Datatype types[3];
+	int size[4];
+	MPI_Aint shift[4];
+	MPI_Aint address[5];
+	MPI_Datatype types[4];
 
 	types[0] = MPI_INT; 
+	types[1] = MPI_DOUBLE;
 	types[1] = MPI_INT;
 	types[2] = MPI_PASSWORD_STRUCT(res.p);
 
 	size[0] = 1;
 	size[1] = 1;
 	size[2] = 1;
+	size[3] = 1;
 
 	MPI_Address(&res,&address[0]);
 	MPI_Address(&(res.ntries),&address[1]);
-	MPI_Address(&(res.taskId),&address[2]);
-	MPI_Address(&(res.p),&address[3]);
+	MPI_Address(&(res.time),&address[2]);
+	MPI_Address(&(res.taskId),&address[3]);
+	MPI_Address(&(res.p),&address[4]);
 		
 	shift[0] = address[1] - address[0];
 	shift[1] = address[2] - address[0];
 	shift[2] = address[3] - address[0];
+	shift[4] = address[4] - address[0];
 
-	MPI_Type_struct(3,size,shift,types,&dataType);
+	MPI_Type_struct(4,size,shift,types,&dataType);
 	MPI_Type_commit(&dataType);
 
 	return dataType;
