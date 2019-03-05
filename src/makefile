@@ -10,7 +10,7 @@ toString.o: toString.h toString.c dataDefinition.h
 	mpicc -g -c toString.c
 
 run: decrypt
-	mpiexec -np $(N_PROCESS) ./decrypt
+	mpirun -np $(N_PROCESS) ./decrypt
 
 clean:
 	rm decrypt

@@ -32,7 +32,6 @@ void printCurrentSituation(PasswordStatus * passwordStatusList, Password * passw
 int main (int argc, char * argv[]){
 	int seed;
 
-DEBUG_LINE
 	//initialize the MPI
 	MPI_Init(&argc, &argv);
 	MPI_Errhandler_set(MPI_COMM_WORLD, MPI_ERRORS_RETURN); 
@@ -122,6 +121,8 @@ void masterCommunicationBehaviour(){
 		lastSolvedPasswordId = resTmp.p.passwordId;
 		nTasksToAssign = passwordStatusList[lastSolvedPasswordId].numTasksDecrypting;
 	}
+
+	printCurrentSituation(passwordStatusList, passwordList);
 
 	//finalize all tasks
 	for(i=1; i< N_TASKS; i++){
@@ -221,8 +222,6 @@ bool masterCalculationBehaviour(Request request, Response * response){
 	double start;
 
 	//save the start time
-	startTime = getTime();
-
 	start = MPI_Wtime();
 
 	//Loop until password solved or a new response recived
