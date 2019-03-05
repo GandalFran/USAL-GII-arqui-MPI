@@ -24,25 +24,27 @@ void calculationBehaviour();
 //Calculus definition
 bool doCalculus(Password * p, int rangeMin, int rangeMax);
 
+void printCurrentSituation(PasswordStatus * passwordStatusList, Password * passwordList);
+
 
 // -------------------------------- Main --------------------------------
 
 int main (int argc, char * argv[]){
+	int seed;
 
 DEBUG_LINE
 	//initialize the MPI
-	EXIT_ON_FAILURE(MPI_Init(&argc,&argv));
-DEBUG_LINE
-	//MPI_Errhandler_set(MPI_COMM_WORLD, MPI_ERRORS_RETURN); 
-DEBUG_LINE
-	//give the random seed 
-	int seed = ID + time(NULL);
-	srand(seed);
-DEBUG_LINE
-	LOG("\n[ID %d][PID %d][Processor %s][seed %d] Started",ID,getpid(),PROC_NAME,seed);
+	MPI_Init(&argc, &argv);
+	MPI_Errhandler_set(MPI_COMM_WORLD, MPI_ERRORS_RETURN); 
 
-	//Wait all processes start
-	EXIT_ON_FAILURE(MPI_Barrier(MPI_COMM_WORLD));
+	//give the random seed 
+	srand( seed = (ID + time(NULL)) );
+
+	//log the initial process data
+	LOG("\n[ID %d][PID %d][PC: %s][SEED: %d] Started",ID,getpid(),getProcessorName(),seed);
+
+	//wait to all
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	//Taking each one to his role
 	if(IS_MASTER(ID)){
@@ -86,10 +88,8 @@ void masterCommunicationBehaviour(){
 	nTasksToAssign = N_TASKS;
 	lastSolvedPasswordId = -1;
 
-	//include the data of each process-> ID, computer, seed
-
-
 	//generate passwords
+	LOG("\n\n");
 	for(i=0; i<N_PASSWORDS; i++){
 		passwordList[i].passwordId = i;
 
@@ -97,7 +97,7 @@ void masterCommunicationBehaviour(){
 		GET_RANDOM_STR_IN_BOUNDS(passwordList[i].decrypted,0,MAX_RAND);
 		ENCRYPT(passwordList[i].decrypted, passwordList[i].encrypted, passwordList[i].s);
 		
-		LOG("\n[ID %d][Generated] %s",ID,passwordToString(passwordList[i]));
+		LOG("\n\t%02d) %s -> %s",i,passwordList[i].decrypted,passwordList[i].encrypted);
 	}
 
 	//wait for responses, and reasignate tasks to each free 
@@ -136,12 +136,12 @@ void responseGestion(PasswordStatus * passwordStatusList, Response * responseLis
 
 	//mark password as solved
 	passwordStatusList[passwordId].finished = TRUE;
+	passwordStatusList[passwordId].solver = res.taskId;
 
 	//mark the task as solved and save the response
-	passwordStatusList[passwordId].finished = TRUE;
 	memcpy(&(responseList[passwordId]),&res,sizeof(Response));
 
-	LOG("\n[ID %d] ID %d <- %s", ID, res.taskId, passwordStatusToString(passwordStatusList[passwordId]));
+	//LOG("\n[ID %d] ID %d <- %s %s", ID, res.taskId, passwordStatusToString(passwordStatusList[passwordId]), responseToString(res));
 }
 
 void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passwordList, PasswordStatus * passwordStatusList, Request * masterReq){
@@ -201,7 +201,7 @@ void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passw
 				else
 					send( passwordStatusList[currentPassword].taskIds[i], &req, MPI_REQUEST_STRUCT(req), DECODE_REQUEST);
 
-				LOG("\n[ID %d] ID %d -> %s", ID, passwordStatusList[currentPassword].taskIds[i], requestToString(req));
+				//LOG("\n[ID %d] ID %d -> %s", ID, passwordStatusList[currentPassword].taskIds[i], requestToString(req));
 			}
 
 			//mark in isRequestSend, which requests has been send
@@ -212,14 +212,18 @@ void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passw
 			}
 		}
 	}
+
+	printCurrentSituation(passwordStatusList, passwordList);
 }
 
 
 bool masterCalculationBehaviour(Request request, Response * response){
-	double startTime;
+	double start;
 
 	//save the start time
 	startTime = getTime();
+
+	start = MPI_Wtime();
 
 	//Loop until password solved or a new response recived
 	do{
@@ -229,9 +233,7 @@ bool masterCalculationBehaviour(Request request, Response * response){
 		//do the calculus and then check if the solution has been found
 		if(doCalculus(&(request.p),request.rangeMin,request.rangeMax)){
 			//fill the response
-			memset(response,0,sizeof(Response));
-			response->taskId = ID;
-			response->time = getTime() - startTime;
+			response->time = MPI_Wtime() - start;
 			memcpy(&(response->p),&(request.p),sizeof(Password));
 			//return TRUE, to know before, that the master has finished the task
 			return TRUE;
@@ -250,15 +252,15 @@ bool masterCalculationBehaviour(Request request, Response * response){
 void calculationBehaviour(){
 	double startTime;
 	Request request;
-	Response response;	
+	Response response;
+	double start;
 
 	do{
 		//Reset the request and response, and wait to password request
 		memset(&request,0,sizeof(Request));
 		recv(MASTER_ID, &request, MPI_REQUEST_STRUCT(request), MPI_ANY_TAG);
 
-		//save the start time
-		startTime = getTime();
+		start = MPI_Wtime();
 
 		//Loop until password solved or a new order recived
 		do{
@@ -270,7 +272,7 @@ void calculationBehaviour(){
 				//fill the response and send to master
 				memset(&response,0,sizeof(Response));
 				response.taskId = ID;
-				response.time = getTime() - startTime;
+				response.time = MPI_Wtime() - start;
 				memcpy(&(response.p),&(request.p),sizeof(Password));
 				send(MASTER_ID, &response, MPI_RESPONSE_STRUCT(response), DECODE_RESPONSE);
 				//go to the external loop
@@ -302,4 +304,29 @@ bool doCalculus(Password * p, int rangeMin, int rangeMax){
 		return TRUE;
 	}
 	return FALSE;
+}
+
+
+
+void printCurrentSituation(PasswordStatus * passwordStatusList, Password * passwordList){
+	int i,j;
+
+	LOG("\n\n>-------------------------------------------------------------<\n");
+
+	for(i=0; i<N_PASSWORDS; i++){
+		LOG("\n\t%02d) %s -> ", i, passwordList[i].encrypted);
+		if(!passwordStatusList[i].finished){
+			LOG("    null -> ");
+			if(passwordStatusList[i].numTasksDecrypting > 0){
+				for(j=0; j<passwordStatusList[i].numTasksDecrypting; j++){
+					LOG("%d ",passwordStatusList[i].taskIds[j]);
+				}
+			}else{
+				LOG("none");
+			}
+		}else{
+			LOG("%-8s -> %d",passwordList[i].decrypted,passwordStatusList[i].solver);
+		}
+	}
+
 }

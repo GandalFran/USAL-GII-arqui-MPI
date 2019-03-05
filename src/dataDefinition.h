@@ -27,14 +27,15 @@ typedef struct{
 }Request;
 
 typedef struct{
-    int ntries;
-    double time;
+	int ntries;
+    long time;
     TaskID taskId;
     Password p;
 }Response;
 
 typedef struct{
     bool finished;
+    TaskID solver;
     PasswordID passwordId;
     int numTasksDecrypting;
     TaskID taskIds[MAX_TASKS];

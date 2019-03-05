@@ -18,23 +18,17 @@ int getNtasks(){
 	return ntasks;
 }
 
+char * getProcessorName(){
+	static char name[TAG_SIZE];
+	static bool solved = FALSE;
 
-char * getProcName(){
-	static bool firstTime = FALSE;
-	static char procname[TAG_SIZE];
-
-	if(!firstTime){
+	if(!solved){
+		solved = TRUE;
 		int foo;
-		memset(procname,0,TAG_SIZE);
-		MPI_Get_processor_name(procname,&foo);
-		firstTime = TRUE;
+		MPI_Get_processor_name(name,&foo);
 	}
 
-	return procname;
-}
-
-double getTime(){
-	return MPI_Wtime();
+	return name;
 }
 
 //Wrap the send, recv, ... and more communication tasks
@@ -54,13 +48,6 @@ void send(TaskID destinationAddr, void * data, MPI_Datatype tipo_datos, MessageT
 		EXIT_ON_FAILURE(MPI_Send(&foo, 1, MPI_INT, destinationAddr, tag, MPI_COMM_WORLD));
 		//EXIT_ON_FAILURE(MPI_Send(NULL, 1, MPI_DATATYPE_NULL, destinationAddr, tag, MPI_COMM_WORLD));
 	}
-/*	switch(tag){
-		case DECODE_REQUEST: 	LOG("\n[ID %d][send] %s to %d content %s", ID, messageTagToSring(tag), destinationAddr,requestToString(*(Request *)data));		break;
-		case DECODE_RESPONSE: 	LOG("\n[ID %d][send] %s to %d content %s", ID, messageTagToSring(tag), destinationAddr,responseToString(*(Response *)data));	break;
-		//case DECODE_STOP: 		LOG("\n[ID %d][send] %s to %d content NULL", ID, messageTagToSring(tag), destinationAddr); break;
-		case FINALIZE: 			LOG("\n[ID %d][send] %s to %d content NULL", ID, messageTagToSring(tag), destinationAddr); break;
-		default: LOG("\n[ID %d][send] %s to %d ", ID, messageTagToSring(tag), destinationAddr);
-	}*/
 
 }
 
@@ -74,14 +61,6 @@ void recv(TaskID destinationAddr, void * data, MPI_Datatype tipo_datos, MessageT
 		EXIT_ON_FAILURE(MPI_Recv(&foo, 1, MPI_INT, destinationAddr, tag, MPI_COMM_WORLD, &status));
 		//EXIT_ON_FAILURE(MPI_Recv(NULL, 1, MPI_DATATYPE_NULL, destinationAddr, tag, MPI_COMM_WORLD, &status));
 	}
-/*
-	switch(status.MPI_TAG){
-		case DECODE_REQUEST: 	LOG("\n[ID %d][recv] %s from %d content %s", ID, messageTagToSring(status.MPI_TAG), status.MPI_SOURCE,requestToString(*(Request *)data));	break;
-		case DECODE_RESPONSE: 	LOG("\n[ID %d][recv] %s from %d content %s", ID, messageTagToSring(status.MPI_TAG), status.MPI_SOURCE,responseToString(*(Response *)data));	break;
-		//case DECODE_STOP: 		LOG("\n[ID %d][recv] %s from %d content NULL", ID, messageTagToSring(status.MPI_TAG), status.MPI_SOURCE); break;
-		case FINALIZE: 			LOG("\n[ID %d][recv] %s from %d content NULL", ID, messageTagToSring(status.MPI_TAG), status.MPI_SOURCE); break;
-		default: LOG("\n[ID %d][recv] %s from %d ", ID, messageTagToSring(status.MPI_TAG), status.MPI_SOURCE);
-	}*/
 
 	if(status.MPI_TAG == FINALIZE)
 		MPI_EXIT(EXIT_SUCCESS);
@@ -159,9 +138,9 @@ MPI_Datatype getMPI_RESPONSE_STRUCT(Response res){
 	MPI_Datatype types[4];
 
 	types[0] = MPI_INT; 
-	types[1] = MPI_DOUBLE;
-	types[1] = MPI_INT;
-	types[2] = MPI_PASSWORD_STRUCT(res.p);
+	types[1] = MPI_LONG; 
+	types[2] = MPI_INT;
+	types[3] = MPI_PASSWORD_STRUCT(res.p);
 
 	size[0] = 1;
 	size[1] = 1;
@@ -177,7 +156,7 @@ MPI_Datatype getMPI_RESPONSE_STRUCT(Response res){
 	shift[0] = address[1] - address[0];
 	shift[1] = address[2] - address[0];
 	shift[2] = address[3] - address[0];
-	shift[4] = address[4] - address[0];
+	shift[3] = address[3] - address[0];
 
 	MPI_Type_struct(4,size,shift,types,&dataType);
 	MPI_Type_commit(&dataType);
