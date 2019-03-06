@@ -1,13 +1,7 @@
-N_PROCESS=5
+N_PROCESS=1
 
-decrypt: decrypt.c toString.o mpiUtils.o utils.h dataDefinition.h
-	mpicc -g decrypt.c toString.o mpiUtils.o -o decrypt -lcrypt
-
-mpiUtils.o: mpiUtils.c mpiUtils.h utils.h dataDefinition.h
-	mpicc -g -c mpiUtils.c
-
-toString.o: toString.h toString.c dataDefinition.h
-	mpicc -g -c toString.c
+decrypt: decrypt.c utils.h
+	mpicc -g decrypt.c -o decrypt -lcrypt
 
 run: decrypt
 	mpirun -np $(N_PROCESS) ./decrypt

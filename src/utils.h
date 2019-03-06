@@ -6,6 +6,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include <crypt.h>
+#include <time.h>
+#include <unistd.h>
+#include <mpi.h>
+
+//mpi facilities
+#define ID ( getId() )
+#define MPITASKS ( getNtasks() )
+#define PROC_NAME ( getProcName() )
+
+#define MASTER_ID ( 0 )
+#define IS_MASTER(id) ( (id) == (MASTER_ID) )
+
+#define MPI_REQUEST_STRUCT(request) (getMPI_REQUEST_STRUCT(request))
+#define MPI_RESPONSE_STRUCT(response) (getMPI_RESPONSE_STRUCT(response))
+#define MPI_PASSWORD_STRUCT(password) (getMPI_PASSWORD_STRUCT(password))
 
 //Constants
 #define SALT_SIZE (3)
@@ -56,5 +71,65 @@
         fprintf(stderr, str, ##__VA_ARGS__);    \
         fflush(stderr);                         \
     }while(0)
+
+    
+#define EXIT(code)                     \
+    do{                                    \
+        LOG("\n[ID:%d][Finalized]",ID);    \
+        MPI_Finalize();                    \
+        exit(code);                        \
+    }while(0)
+
+#define EXIT_ON_FAILURE(returnValue)                                                                                \
+    do{                                                                                                             \
+        int tagsize;                                                                                                \
+        char errortag[TAG_SIZE];                                                                                    \
+        int code = (returnValue);                                                                                   \
+        if(code != (MPI_SUCCESS)){                                                                                  \
+            MPI_Error_string(code, errortag, &tagsize);                                                             \
+            LOG("\n[ID %d][ERROR %d][%s:%d:%s] %s", ID, code, __FILE__, __LINE__, __FUNCTION__, errortag);          \
+            EXIT(EXIT_FAILURE);                                                                                 \
+        }                                                                                                           \
+    }while(0)
+
+
+//data definition
+
+#define TRUE 1
+#define FALSE 0
+
+typedef unsigned short bool;
+typedef char Salt [SALT_SIZE];
+typedef int PasswordID, TaskID;
+typedef enum{DECODE_REQUEST=10,DECODE_RESPONSE=11,FINALIZE=13,UNKNOWN=14} MessageTag;
+
+typedef struct{
+    Salt s;
+    PasswordID passwordId;
+    char decrypted[PASSWORD_SIZE];
+    char encrypted[PASSWORD_SIZE];
+}Password;
+
+typedef struct{
+    int rangeMin;
+    int rangeMax;
+    Password p;
+}Request;
+
+typedef struct{
+    int ntries;
+    long time;
+    TaskID taskId;
+    Password p;
+}Response;
+
+typedef struct{
+    bool finished;
+    TaskID solver;
+    PasswordID passwordId;
+    int numTasksDecrypting;
+    TaskID taskIds[MAX_TASKS];
+}PasswordStatus;
+
 
 #endif
