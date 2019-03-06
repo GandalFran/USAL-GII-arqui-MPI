@@ -10,18 +10,6 @@
 #include <unistd.h>
 #include <mpi.h>
 
-//mpi facilities
-#define ID ( getId() )
-#define MPITASKS ( getNtasks() )
-#define PROC_NAME ( getProcName() )
-
-#define MASTER_ID ( 0 )
-#define IS_MASTER(id) ( (id) == (MASTER_ID) )
-
-#define MPI_REQUEST_STRUCT(request) (getMPI_REQUEST_STRUCT(request))
-#define MPI_RESPONSE_STRUCT(response) (getMPI_RESPONSE_STRUCT(response))
-#define MPI_PASSWORD_STRUCT(password) (getMPI_PASSWORD_STRUCT(password))
-
 //Constants
 #define SALT_SIZE (3)
 #define TAG_SIZE (100)
@@ -33,7 +21,7 @@
 #define MAX_TASKS (30)
 #define MAX_PASSWORDS (30)
 
-
+#define NUMCHECKSMAIL (10)
 #define MAX_RAND (9999999)
 
 //Random number generation
@@ -54,6 +42,19 @@
 		sprintf(str,"%08d",GET_RANDOM_IN_BOUNDS(a,b));	\
 	}while(0)
 
+//mpi facilities
+#define ID ( getId() )
+#define MPITASKS ( getNtasks() )
+#define PROC_NAME ( getProcName() )
+
+#define MASTER_ID ( 0 )
+#define IS_MASTER(id) ( (id) == (MASTER_ID) )
+
+#define NULL_DATATYPE MPI_INT
+#define MPI_REQUEST_STRUCT(request) (getMPI_REQUEST_STRUCT(request))
+#define MPI_RESPONSE_STRUCT(response) (getMPI_RESPONSE_STRUCT(response))
+#define MPI_PASSWORD_STRUCT(password) (getMPI_PASSWORD_STRUCT(password))
+
 //Utils
 #define NO_TASKS_WORKING_IN_PASSWORD(ntasks) ((ntasks)==0)
 #define IS_EQUAL_TO_STRING(str1,str2) (strcmp(str1,str2)==0)
@@ -73,7 +74,7 @@
     }while(0)
 
     
-#define EXIT(code)                     \
+#define EXIT(code)                         \
     do{                                    \
         LOG("\n[ID:%d][Finalized]",ID);    \
         MPI_Finalize();                    \
@@ -88,7 +89,7 @@
         if(code != (MPI_SUCCESS)){                                                                                  \
             MPI_Error_string(code, errortag, &tagsize);                                                             \
             LOG("\n[ID %d][ERROR %d][%s:%d:%s] %s", ID, code, __FILE__, __LINE__, __FUNCTION__, errortag);          \
-            EXIT(EXIT_FAILURE);                                                                                 \
+            EXIT(EXIT_FAILURE);                                                                                     \
         }                                                                                                           \
     }while(0)
 
@@ -101,7 +102,7 @@
 typedef unsigned short bool;
 typedef char Salt [SALT_SIZE];
 typedef int PasswordID, TaskID;
-typedef enum{DECODE_REQUEST=10,DECODE_RESPONSE=11,FINALIZE=13,UNKNOWN=14} MessageTag;
+typedef enum{DECODE_REQUEST=10,DECODE_RESPONSE=11,DECODE_STOP=12,FINALIZE=13,IDENTITY=14} MessageTag;
 
 typedef struct{
     Salt s;

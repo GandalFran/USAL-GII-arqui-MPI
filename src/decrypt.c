@@ -2,48 +2,34 @@
 
 #define DEBUG_LINE fprintf(stderr, "\n[%d:%s:%s]\n",__LINE__,__FILE__,__FUNCTION__);
 
-//Communication master behaviour
+//Behaviours
+void calculationBehaviour();
 void masterCommunicationBehaviour();
 
-void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passwordList, PasswordStatus * passwordStatusList, Request * masterReq);
-bool masterCalculationBehaviour(Request request, Response * response);
-void responseGestion(PasswordStatus * passwordStatusList, Response * responseList, Response res);
-
-//Calculation task behaviour
-void calculationBehaviour();
-
-//Calculus definition
+//auxiliar behaviour functions
 bool doCalculus(Password * p, int rangeMin, int rangeMax);
+bool requestGestion(Request request, Response * response);
+void responseGestion(PasswordStatus * passwordStatusList, Response * responseList, Response res);
+void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passwordList, PasswordStatus * passwordStatusList, Request * masterReq);
 
 //string builders
 void printCurrentSituation(PasswordStatus * passwordStatusList, Password * passwordList);
-
-char * passwordToString(Password p);
-char * requestToString(Request req);
-char * responseToString(Response res);
-char * passwordStatusToString(PasswordStatus ps);
-char * messageTagToSring(MessageTag msg);
 
 //mpi facilities
 int getId();
 int getNtasks();
 char * getProcessorName();
-
 bool areThereAnyMsg();
-void mySend(TaskID destinationAddr, void * data, MPI_Datatype tipo_datos, MessageTag tag);
-void myRecv(TaskID destinationAddr, void * data, MPI_Datatype tipo_datos, MessageTag tag);
-
+void mySend(TaskID destinationAddr, int nElements, void * data, MPI_Datatype dataType, MessageTag tag);
+MessageTag myRecv(TaskID destinationAddr, int nElements, void * data, MPI_Datatype dataType, MessageTag tag);
 MPI_Datatype getMPI_PASSWORD_STRUCT();
 MPI_Datatype getMPI_REQUEST_STRUCT();
 MPI_Datatype getMPI_RESPONSE_STRUCT();
 
 
-
-
-// -------------------------------- Main --------------------------------
-
 int main (int argc, char * argv[]){
-	int seed;
+	int seed, i;
+	char identity[TAG_SIZE];
 
 	//initialize the MPI
 	MPI_Init(&argc, &argv);
@@ -52,8 +38,19 @@ int main (int argc, char * argv[]){
 	//give the random seed 
 	srand( seed = (ID + time(NULL)) );
 
-	//log the initial process data
-	LOG("\n[ID %d][PID %d][PC: %s][SEED: %d] Started",ID,getpid(),getProcessorName(),seed);
+	//save the initial process data
+	sprintf(identity,"[ID %d][PID %d][PC: %s][SEED: %d]",ID,getpid(),getProcessorName(),seed);
+	if(IS_MASTER(ID)){
+		printf("\nTasks: %d Passwords: %d\n",N_TASKS,N_PASSWORDS);
+		printf("\n%s",identity);
+		for(i=0; i< N_TASKS-1; i++){
+			myRecv(MPI_ANY_SOURCE, TAG_SIZE, identity, MPI_CHAR, IDENTITY);
+			printf("\n%s",identity);
+		}
+		printf("\n");
+	}else{
+		mySend(MASTER_ID,TAG_SIZE,identity,MPI_CHAR,IDENTITY);
+	}
 
 	//wait to all
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -69,14 +66,36 @@ int main (int argc, char * argv[]){
 	EXIT(EXIT_SUCCESS);
 }
 
+void calculationBehaviour(){
+	bool solvedByMe;
+	MessageTag tag;
+	Request request;
+	Response response;
 
-// -------------------------------- Communication task behaviour --------------------------------
+	do{
+		//Reset the request and response, and wait to password request
+		memset(&request,0,sizeof(Request));
+		myRecv(MASTER_ID, 1, &request, MPI_REQUEST_STRUCT(request), DECODE_REQUEST);
+		//Hangle re request
+		solvedByMe = requestGestion(request,&response);
+		if(solvedByMe)
+			mySend(MASTER_ID,1,&response,MPI_RESPONSE_STRUCT(response),DECODE_RESPONSE);
+		//recv the decode_stop or finalize to discard it
+		tag = myRecv(MASTER_ID, 0, NULL, NULL_DATATYPE, MPI_ANY_TAG);
+		if(FINALIZE == tag){
+			EXIT(EXIT_SUCCESS);
+			return;
+		}
+	}while(TRUE);
+}
+
 void masterCommunicationBehaviour(){
 	bool solvedByMe;
-	Response resTmp;
-	Request reqToMaster;
+	Response response;
 	int nTasksToAssign;
-	int solvedPasswords, i, lastSolvedPasswordId;
+	Request reqToMaster;
+	TaskID * tasksToAssgin;
+	int solvedPasswords, i;
 
 	TaskID firstAssignation[MAX_PASSWORDS];
 
@@ -90,72 +109,108 @@ void masterCommunicationBehaviour(){
 	memset(responseList,0,MAX_PASSWORDS*sizeof(Response));
 
 	for(i=0; i<MAX_PASSWORDS; i++){
-		passwordStatusList[i].passwordId = i;
-		passwordStatusList[i].numTasksDecrypting = 0;
-		passwordStatusList[i].finished = FALSE;
-
 		firstAssignation[i] = i;
+		passwordStatusList[i].passwordId = i;
+		passwordStatusList[i].finished = FALSE;
 	}
 
 	nTasksToAssign = N_TASKS;
-	lastSolvedPasswordId = -1;
+	tasksToAssgin = firstAssignation;
 
 	//generate passwords
-	LOG("\n\n");
 	for(i=0; i<N_PASSWORDS; i++){
 		passwordList[i].passwordId = i;
 
 		GET_RANDMON_SALT(passwordList[i].s);
 		GET_RANDOM_STR_IN_BOUNDS(passwordList[i].decrypted,0,MAX_RAND);
 		ENCRYPT(passwordList[i].decrypted, passwordList[i].encrypted, passwordList[i].s);
-		
-		LOG("\n\t%02d) %s -> %s",i,passwordList[i].decrypted,passwordList[i].encrypted);
 	}
 
 	//wait for responses, and reasignate tasks to each free 
 	for(solvedPasswords = 0; solvedPasswords < N_PASSWORDS; solvedPasswords++){
 		//division of tasks: if is the firstTime, the asignation is to all tasks, if not, is to the tasks implicated in the last solved password
-		if(lastSolvedPasswordId < 0)
-			taskAssignation(firstAssignation, nTasksToAssign, passwordList, passwordStatusList, &reqToMaster);
-		else
-			taskAssignation(passwordStatusList[lastSolvedPasswordId].taskIds, nTasksToAssign, passwordList, passwordStatusList, &reqToMaster);
+		taskAssignation(tasksToAssgin, nTasksToAssign, passwordList, passwordStatusList, &reqToMaster);
 
 		//calculate the master assignement
-		solvedByMe = masterCalculationBehaviour(reqToMaster,&resTmp);
+		solvedByMe = requestGestion(reqToMaster,&response);
 
 		//if the one who has solved isn't the master, wait for a response
 		if(!solvedByMe)
-			myRecv(MPI_ANY_SOURCE, &resTmp, MPI_RESPONSE_STRUCT(resTmp), DECODE_RESPONSE);
+			myRecv(MPI_ANY_SOURCE, 1, &response, MPI_RESPONSE_STRUCT(response), DECODE_RESPONSE);
+
+		//stop all tasks working on the password except if it is the last time
+		for(i=0; i<passwordStatusList[response.p.passwordId].numTasksDecrypting; i++){
+			if(!IS_MASTER(passwordStatusList[response.p.passwordId].taskIds[i])){
+				mySend(passwordStatusList[response.p.passwordId].taskIds[i], 0 , NULL, NULL_DATATYPE, (solvedPasswords!=N_PASSWORDS-1) ? DECODE_STOP : FINALIZE);
+			}
+		}
 
 		//make the response treatment
-		responseGestion(passwordStatusList,responseList,resTmp);
+		responseGestion(passwordStatusList,responseList,response);
 
 		//save the last solved password id to assign tasks in the next iteration
-		lastSolvedPasswordId = resTmp.p.passwordId;
-		nTasksToAssign = passwordStatusList[lastSolvedPasswordId].numTasksDecrypting;
+		tasksToAssgin = passwordStatusList[response.p.passwordId].taskIds;
+		nTasksToAssign = passwordStatusList[response.p.passwordId].numTasksDecrypting;
 	}
 
 	printCurrentSituation(passwordStatusList, passwordList);
+}
 
-	//finalize all tasks
-	for(i=1; i< N_TASKS; i++){
-		mySend(i, NULL , MPI_DATATYPE_NULL , FINALIZE);
+bool doCalculus(Password * p, int rangeMin, int rangeMax){
+	char possibleSolution[PASSWORD_SIZE], possibleSolutionEncripted[PASSWORD_SIZE];
+
+	//generate and encrypt possible solution
+	GET_RANDOM_STR_IN_BOUNDS(possibleSolution,rangeMin,rangeMax);
+	ENCRYPT(possibleSolution, possibleSolutionEncripted, p->s);
+
+	//check if is the possible solution is equal to the encripted data
+	if ( IS_EQUAL_TO_STRING(possibleSolutionEncripted,p->encrypted) )
+	{
+		strcpy(p->decrypted,possibleSolution);
+		return TRUE;
 	}
+	return FALSE;
+}
+
+bool requestGestion(Request request, Response * response){
+	double start;
+
+	//save the start time
+	start = MPI_Wtime();
+	//Loop until password solved or a new response recived
+	do{
+		//increment the try number
+		(response->ntries)++;
+
+		//do the calculus and then check if the solution has been found
+		if(doCalculus(&(request.p),request.rangeMin,request.rangeMax)){
+			//fill the response
+			memset(response,0,sizeof(Response));
+			response->taskId = ID;
+			response->time = MPI_Wtime() - start;
+			memcpy(&(response->p),&(request.p),sizeof(Password));
+			//return TRUE, to know before, that the master has finished the task
+			return TRUE;
+		}
+
+		//Check if a message has been recived
+		if( 0 == (response->ntries % NUMCHECKSMAIL)){
+			if(areThereAnyMsg())
+				return FALSE;
+		}
+		
+	}while(TRUE);
 
 }
 
 void responseGestion(PasswordStatus * passwordStatusList, Response * responseList, Response res){
-	int i;
 	PasswordID passwordId = res.p.passwordId;
 
 	//mark password as solved
 	passwordStatusList[passwordId].finished = TRUE;
 	passwordStatusList[passwordId].solver = res.taskId;
-
 	//mark the task as solved and save the response
 	memcpy(&(responseList[passwordId]),&res,sizeof(Response));
-
-	//LOG("\n[ID %d] ID %d <- %s %s", ID, res.taskId, passwordStatusToString(passwordStatusList[passwordId]), responseToString(res));
 }
 
 void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passwordList, PasswordStatus * passwordStatusList, Request * masterReq){
@@ -164,11 +219,12 @@ void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passw
 
 	TaskID currentTask;
 	bool isRequestSend [MAX_TASKS];
+	bool hasBeenStopped[MAX_PASSWORDS];
 	PasswordID passwordAssignedToTask[MAX_TASKS];
 	PasswordID currentPassword, selectedPassword;
 
-
 	memset(isRequestSend,0,sizeof(bool)*MAX_TASKS);
+	memset(hasBeenStopped,0,sizeof(bool)*MAX_TASKS);
 
 	//foreach task, we search the optimun password to assign
 	for(currentTask=0; currentTask < nTasksToAssign; currentTask++){
@@ -181,8 +237,17 @@ void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passw
 			}
 		}
 
-		//assign the password to the task and
+		//assign the password to the task
 		passwordAssignedToTask[currentTask] = selectedPassword;
+
+		//stop the current porcesses working in the password
+		if(!hasBeenStopped[selectedPassword]){
+			hasBeenStopped[selectedPassword] = TRUE;
+			for(i=0; i<passwordStatusList[selectedPassword].numTasksDecrypting; i++){
+				if(!IS_MASTER(passwordStatusList[selectedPassword].taskIds[i]))
+					mySend(passwordStatusList[selectedPassword].taskIds[i], 0, NULL, NULL_DATATYPE, DECODE_STOP);
+			}
+		}
 
 		//update the selected password status
 		passwordStatusList[selectedPassword].taskIds[passwordStatusList[selectedPassword].numTasksDecrypting] = taskToAssign[currentTask];
@@ -213,7 +278,7 @@ void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passw
 				if( IS_MASTER(passwordStatusList[currentPassword].taskIds[i]) )
 					memcpy(masterReq,&req,sizeof(Request));
 				else
-					mySend( passwordStatusList[currentPassword].taskIds[i], &req, MPI_REQUEST_STRUCT(req), DECODE_REQUEST);
+					mySend( passwordStatusList[currentPassword].taskIds[i], 1, &req, MPI_REQUEST_STRUCT(req), DECODE_REQUEST);
 
 				//LOG("\n[ID %d] ID %d -> %s", ID, passwordStatusList[currentPassword].taskIds[i], requestToString(req));
 			}
@@ -231,203 +296,63 @@ void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passw
 }
 
 
-bool masterCalculationBehaviour(Request request, Response * response){
-	double start;
-
-	//save the start time
-	start = MPI_Wtime();
-
-	//Loop until password solved or a new response recived
-	do{
-		//increment the try number
-		(response->ntries)++;
-
-		//do the calculus and then check if the solution has been found
-		if(doCalculus(&(request.p),request.rangeMin,request.rangeMax)){
-			//fill the response
-			memset(response,0,sizeof(Response));
-			response->taskId = ID;
-			response->time = MPI_Wtime() - start;
-			memcpy(&(response->p),&(request.p),sizeof(Password));
-			//return TRUE, to know before, that the master has finished the task
-			return TRUE;
-		}
-
-		//Check if a message has been recived --> its neccesary to handle a request an mySend
-		if(areThereAnyMsg())
-			return FALSE;
-		
-	}while(TRUE);
-
-}
-
-// -------------------------------- Calculation task behaviour --------------------------------
-
-void calculationBehaviour(){
-	double startTime;
-	Request request;
-	Response response;
-	double start;
-
-	do{
-		//Reset the request and response, and wait to password request
-		memset(&request,0,sizeof(Request));
-		myRecv(MASTER_ID, &request, MPI_REQUEST_STRUCT(request), MPI_ANY_TAG);
-
-		start = MPI_Wtime();
-
-		//Loop until password solved or a new order recived
-		do{
-			//increment the try number
-			response.ntries++;
-
-			//do the calculus and then check if the solution has been found
-			if(doCalculus(&(request.p),request.rangeMin,request.rangeMax)){
-				//fill the response and mySend to master
-				memset(&response,0,sizeof(Response));
-				response.taskId = ID;
-				response.time = MPI_Wtime() - start;
-				memcpy(&(response.p),&(request.p),sizeof(Password));
-				mySend(MASTER_ID, &response, MPI_RESPONSE_STRUCT(response), DECODE_RESPONSE);
-				//go to the external loop
-				break;
-			}
-
-			//Non-blocking check if Master has mySend another order -> range change or password solved
-			if(areThereAnyMsg())
-				break;
-			
-		}while(TRUE);
-	
-	}while(TRUE);
-}
-
-// -------------------------------- Calculus definition --------------------------------
-
-bool doCalculus(Password * p, int rangeMin, int rangeMax){
-	char possibleSolution[PASSWORD_SIZE], possibleSolutionEncripted[PASSWORD_SIZE];
-
-	//generate and encrypt possible solution
-	GET_RANDOM_STR_IN_BOUNDS(possibleSolution,rangeMin,rangeMax);
-	ENCRYPT(possibleSolution, possibleSolutionEncripted, p->s);
-
-	//check if is the possible solution is equal to the encripted data
-	if ( IS_EQUAL_TO_STRING(possibleSolutionEncripted,p->encrypted) )
-	{
-		strcpy(p->decrypted,possibleSolution);
-		return TRUE;
-	}
-	return FALSE;
-}
-
-
-
+// ----------------------------------------------------------------------------------------------------------------
 void printCurrentSituation(PasswordStatus * passwordStatusList, Password * passwordList){
 	int i,j;
 
-	LOG("\n\n>-------------------------------------------------------------<\n");
+	char separator[]="+--+--------+-------------+------+-----------------------------------------------";
+	char header[]=   "|ID|  NORMAL|    ENCRYPTED|SOLVER| TASKS WORKING";
 
-	for(i=0; i<N_PASSWORDS; i++){
-		LOG("\n\t%02d) %s -> ", i, passwordList[i].encrypted);
-		if(!passwordStatusList[i].finished){
-			LOG("    null -> ");
-			if(passwordStatusList[i].numTasksDecrypting > 0){
+	printf("\n%s\n%s",separator,header);
+
+	for(i=0; i< N_PASSWORDS; i++){
+		printf("\n%s",separator);
+		
+		printf("\n|%02d|%8s|%13s|",i,passwordList[i].decrypted,passwordList[i].encrypted);
+
+		if(!passwordStatusList[i].finished)
+			printf("  --  |");
+		else
+			printf("  %02d  |",passwordStatusList[i].solver);
+
+		if(passwordStatusList[i].finished)
+			printf(" SOLVED");
+		else{
+			if(passwordStatusList[i].numTasksDecrypting == 0)
+				printf(" --");
+			else{
+				printf(" ");
 				for(j=0; j<passwordStatusList[i].numTasksDecrypting; j++){
-					LOG("%d ",passwordStatusList[i].taskIds[j]);
+						printf("%02d ",passwordStatusList[i].taskIds[j]);
 				}
-			}else{
-				LOG("none");
 			}
-		}else{
-			LOG("%-8s -> %d",passwordList[i].decrypted,passwordStatusList[i].solver);
 		}
 	}
+
+	printf("\n%s\n",separator);
 }
 
-char * passwordToString(Password p){
-	static char tag[TAG_SIZE];
-
-	memset(tag,0,TAG_SIZE);
-	sprintf(tag,"Password{id:%d, decrypted:%s, encrypted: %s, salt: %s}",p.passwordId,p.decrypted,p.encrypted,p.s);
-
-	return tag;
-}
-
-char * requestToString(Request req){
-	static char tag[TAG_SIZE];
-
-	memset(tag,0,TAG_SIZE);
-	sprintf(tag,"Request{rangeMin:%d, rangeMax:%d, password:%s }",req.rangeMin,req.rangeMax,passwordToString(req.p));
-
-	return tag;
-}
-
-char * responseToString(Response res){
-	static char tag[TAG_SIZE];
-
-	memset(tag,0,TAG_SIZE);
-	sprintf(tag,"Response{id:%d, ntries: %d, password:%s time:%ld}",res.taskId,res.ntries,passwordToString(res.p),res.time);
-
-	return tag;
-}
-
-char * passwordStatusToString(PasswordStatus ps){
-	int i;
-	static char tag[TAG_SIZE];
-
-	memset(tag,0,TAG_SIZE);
-	sprintf(tag,"PasswordStatus{id:%d, finished:%d, numTasksDecrypting:%d, taskIds:TaskID[",ps.passwordId,ps.finished,ps.numTasksDecrypting);
-	for(i=0; i<ps.numTasksDecrypting; i++) sprintf(tag,"%s%d, ",tag,ps.taskIds[i]);
-	sprintf(tag,"%s\b\b]}",tag);
-
-	return tag;
-}
-
-char * messageTagToSring(MessageTag msg){
-	static char tag[TAG_SIZE];
-
-	memset(tag,0,TAG_SIZE);
-	switch(msg){
-		case DECODE_REQUEST: 	strcpy(tag,"DECODE_REQUEST");	break;
-		case DECODE_RESPONSE: 	strcpy(tag,"DECODE_RESPONSE");	break;
-		case FINALIZE: 			strcpy(tag,"FINALIZE");			break;
-		default: sprintf(tag,"UNKNOWN:%d",msg);
-	}
-
-	return tag;
-}
-
-/////////////////////////////////////////////////////////////////////////////////////
-
-
+//mpi utils
 int getId(){
 	static int internalId = -1;
-
-	if(-1 == internalId)
-		MPI_Comm_rank(MPI_COMM_WORLD, &internalId);
-	
+	if(-1 == internalId) MPI_Comm_rank(MPI_COMM_WORLD, &internalId);
 	return internalId;
 }
 
 int getNtasks(){
 	static int ntasks = -1;
-
-	if(-1 == ntasks)
-		MPI_Comm_size(MPI_COMM_WORLD, &ntasks);
-	
+	if(-1 == ntasks) MPI_Comm_size(MPI_COMM_WORLD, &ntasks);
 	return ntasks;
 }
 
 char * getProcessorName(){
 	static char name[TAG_SIZE];
 	static bool solved = FALSE;
-
 	if(!solved){
 		solved = TRUE;
 		int foo;
 		MPI_Get_processor_name(name,&foo);
 	}
-
 	return name;
 }
 
@@ -439,31 +364,15 @@ bool areThereAnyMsg(){
 	return (result != 0) ? TRUE : FALSE;
 }
 
-void mySend(TaskID destinationAddr, void * data, MPI_Datatype tipo_datos, MessageTag tag){
-
-	if(NULL != data)
-		EXIT_ON_FAILURE(MPI_Send(data, 1, tipo_datos, destinationAddr, tag, MPI_COMM_WORLD));
-	else{
-		int foo = 1;
-		EXIT_ON_FAILURE(MPI_Send(&foo, 1, MPI_INT, destinationAddr, tag, MPI_COMM_WORLD));
-		//EXIT_ON_FAILURE(MPI_Send(NULL, 1, MPI_DATATYPE_NULL, destinationAddr, tag, MPI_COMM_WORLD));
-	}
-
+void mySend(TaskID destinationAddr, int nElements, void * data, MPI_Datatype dataType, MessageTag tag){
+	MPI_Request req;
+	EXIT_ON_FAILURE(MPI_Isend(data, nElements , dataType, destinationAddr, tag, MPI_COMM_WORLD, &req));
 }
 
-void myRecv(TaskID destinationAddr, void * data, MPI_Datatype tipo_datos, MessageTag tag){
+MessageTag myRecv(TaskID destinationAddr, int nElements, void * data, MPI_Datatype dataType, MessageTag tag){
 	MPI_Status status;
-	int foo;
-
-	if(NULL != data)
-		EXIT_ON_FAILURE(MPI_Recv(data, 1, tipo_datos, destinationAddr, tag, MPI_COMM_WORLD, &status));
-	else{
-		EXIT_ON_FAILURE(MPI_Recv(&foo, 1, MPI_INT, destinationAddr, tag, MPI_COMM_WORLD, &status));
-		//EXIT_ON_FAILURE(MPI_Recv(NULL, 1, MPI_DATATYPE_NULL, destinationAddr, tag, MPI_COMM_WORLD, &status));
-	}
-
-	if(status.MPI_TAG == FINALIZE)
-		EXIT(EXIT_SUCCESS);
+	EXIT_ON_FAILURE(MPI_Recv(data, nElements, dataType, destinationAddr, tag, MPI_COMM_WORLD, &status));
+	return status.MPI_TAG;
 }
 
 MPI_Datatype getMPI_PASSWORD_STRUCT(Password p){
