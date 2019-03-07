@@ -12,8 +12,9 @@ bool requestGestion(Request request, Response * response);
 void responseGestion(PasswordStatus * passwordStatusList, Response res);
 void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passwordList, PasswordStatus * passwordStatusList, Request * masterReq);
 
-//string builders
+//IO
 void printCurrentSituation(PasswordStatus * passwordStatusList, Password * passwordList);
+void exportToFile(Password * passwordList, PasswordStatus * passwordStatusList, long * triesPerTask, double totalTime);
 
 //mpi facilities
 int getId();
@@ -95,9 +96,9 @@ void calculationBehaviour(){
 
 void masterCommunicationBehaviour(){
 	bool solvedByMe;
-	double start, end;
 	int solvedPasswords, i;
-	long totalTriesOfEach[MAX_TASKS], tmpTries = 0;
+	double start, end, totalTime;
+	long triesPerTask[MAX_TASKS], tmpTries = 0;
 
 	Response response;
 	Request reqToMaster;
@@ -122,7 +123,6 @@ void masterCommunicationBehaviour(){
 	//generate passwords
 	for(i=0; i<N_PASSWORDS; i++){
 		passwordList[i].id = i;
-
 		GET_RANDMON_SALT(passwordList[i].s);
 		GET_RANDOM_STR_IN_BOUNDS(passwordList[i].decrypted,0,MAX_RAND);
 		ENCRYPT(passwordList[i].decrypted, passwordList[i].encrypted, passwordList[i].s);
@@ -168,16 +168,16 @@ void masterCommunicationBehaviour(){
 
 	//print the current situation one last time, and the time
 	printCurrentSituation(passwordStatusList, passwordList);
-	printf("\nTOTAL: %.2fs\n",end-start);
 
 	//wait to the calculation tasks send us data
-	totalTriesOfEach[MASTER_ID] = tmpTries;
+	totalTime = end - start;
+	triesPerTask[MASTER_ID] = tmpTries;
 	for(i=1; i<N_TASKS-1; i++){
 		myRecv(i, 1, &tmpTries, MPI_LONG, FINALIZE_RESPONSE);
-		totalTriesOfEach[i] = tmpTries;
+		triesPerTask[i] = tmpTries;
 	}
 
-	//export the data to be processed
+	exportToFile(passwordList, passwordStatusList, triesPerTask, totalTime);
 }
 
 bool doCalculus(Password * p, int rangeMin, int rangeMax){
@@ -364,6 +364,42 @@ void printCurrentSituation(PasswordStatus * passwordStatusList, Password * passw
 
 	printf("\n%s\n",separator);
 }
+
+
+void exportToFile(Password * passwordList, PasswordStatus * passwordStatusList, long * triesPerTask, double totalTime){
+	int i;
+	FILE * f;
+	long totalTries;
+
+	f = fopen(OUTPUT_FILE,"w+");
+
+	//export the passwords 
+	fprintf(f,"\nPasswords:");
+	for(i=0; i< N_PASSWORDS; i++){
+		fprintf(f,"\n%d %s %s %d %.2f %d",
+			passwordList[i].id,
+			passwordList[i].decrypted,
+			passwordList[i].encrypted,
+			passwordStatusList[i].solverResponse.taskId,
+			passwordStatusList[i].solverResponse.time,
+			passwordStatusList[i].solverResponse.ntries
+		);
+	}
+
+	//export the tries per task
+	fprintf(f,"\n\nTries per task:");
+	for(i=0; i< N_TASKS; i++){
+		totalTries += triesPerTask[i];
+		fprintf(f,"\n%d %ld",i,triesPerTask[i]);
+	}
+
+	//export the rest of the data
+	fprintf(f,"\n\nTIME\t%.2f\tTRIES%ld",totalTime,totalTries);
+	printf("\nTOTAL: %.2f s %ld tries\n",totalTime,totalTries);
+
+	fclose(f);
+}
+
 
 //mpi utils
 int getId(){

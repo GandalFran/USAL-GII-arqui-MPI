@@ -10,20 +10,22 @@
 #include <unistd.h>
 #include <mpi.h>
 
+//======================================================================
+#define N_TASKS (MPITASKS)
+#define N_PASSWORDS (10)
+#define OUTPUT_FILE "output.csv"
+
+#define NUMCHECKSMAIL (10)
+#define SEED_BASE (100)
+#define MAX_RAND (9999999)
+//======================================================================
+
 //Constants
 #define SALT_SIZE (3)
 #define TAG_SIZE (100)
 #define PASSWORD_SIZE (20)
 #define MAX_TASKS (30)
 #define MAX_PASSWORDS (30)
-
-
-#define N_TASKS (MPITASKS)  //defined at the makefile
-#define N_PASSWORDS (20)     //defined here locally
-
-#define NUMCHECKSMAIL (10)
-#define SEED_BASE (3)
-#define MAX_RAND (9999999)
 
 //Random number generation
 #define GET_SEED(id) ( (id)+(SEED_BASE) )
