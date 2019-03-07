@@ -14,17 +14,19 @@
 #define SALT_SIZE (3)
 #define TAG_SIZE (100)
 #define PASSWORD_SIZE (20)
+#define MAX_TASKS (30)
+#define MAX_PASSWORDS (30)
+
 
 #define N_TASKS (MPITASKS)  //defined at the makefile
 #define N_PASSWORDS (5)     //defined here locally
 
-#define MAX_TASKS (30)
-#define MAX_PASSWORDS (30)
-
 #define NUMCHECKSMAIL (10)
+#define SEED_BASE (3)
 #define MAX_RAND (9999999)
 
 //Random number generation
+#define GET_SEED(id) ( (id)+(SEED_BASE) )
 #define GET_RANDOM (rand()) 
 #define GET_RANDOM_IN_BOUNDS(a,b)  ( (a) + ( GET_RANDOM % ((b)-(a)) ) )
 

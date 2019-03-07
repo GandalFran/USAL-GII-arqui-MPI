@@ -36,7 +36,7 @@ int main (int argc, char * argv[]){
 	MPI_Errhandler_set(MPI_COMM_WORLD, MPI_ERRORS_RETURN); 
 
 	//save the initial process data
-	sprintf(identity,"[ID %d][PID %d][PC: %s][SEED: %d]",ID,getpid(),getProcessorName(),ID);
+	sprintf(identity,"[ID %d][PID %d][PC: %s][SEED: %d]",ID,getpid(),getProcessorName(),GET_SEED(ID));
 	if(IS_MASTER(ID)){
 		printf("\nTasks: %d Passwords: %d\n",N_TASKS,N_PASSWORDS);
 		printf("\n%s",identity);
@@ -70,7 +70,7 @@ void calculationBehaviour(){
 	Response response;
 
 	//give the seed
-	srand( ID );
+	srand(GET_SEED(ID));
 
 	do{
 		//Reset the request and response, and wait to password request
@@ -122,7 +122,7 @@ void masterCommunicationBehaviour(){
 	}
 
 	//give the seed
-	srand( ID );
+	srand(GET_SEED(ID));
 
 	//wait for responses, and reasignate tasks to each free 
 	for(solvedPasswords = 0; solvedPasswords < N_PASSWORDS; solvedPasswords++){
