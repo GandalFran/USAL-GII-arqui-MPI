@@ -106,7 +106,7 @@ typedef enum{DECODE_REQUEST=10,DECODE_RESPONSE=11,DECODE_STOP=12,FINALIZE=13,IDE
 
 typedef struct{
     Salt s;
-    PasswordID passwordId;
+    PasswordID id;
     char decrypted[PASSWORD_SIZE];
     char encrypted[PASSWORD_SIZE];
 }Password;
@@ -121,15 +121,17 @@ typedef struct{
     int ntries;
     long time;
     TaskID taskId;
-    Password p;
+    PasswordID passwordId;;
 }Response;
 
 typedef struct{
     bool finished;
-    TaskID solver;
-    PasswordID passwordId;
     int numTasksDecrypting;
+
+    PasswordID passwordId;
     TaskID taskIds[MAX_TASKS];
+
+    Response solverResponse;
 }PasswordStatus;
 
 
