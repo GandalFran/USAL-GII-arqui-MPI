@@ -19,7 +19,7 @@
 
 
 #define N_TASKS (MPITASKS)  //defined at the makefile
-#define N_PASSWORDS (5)     //defined here locally
+#define N_PASSWORDS (20)     //defined here locally
 
 #define NUMCHECKSMAIL (10)
 #define SEED_BASE (3)
@@ -92,7 +92,7 @@
 typedef unsigned short bool;
 typedef char Salt [SALT_SIZE];
 typedef int PasswordID, TaskID;
-typedef enum{DECODE_REQUEST=10,DECODE_RESPONSE=11,DECODE_STOP=12,FINALIZE=13,IDENTITY=14} MessageTag;
+typedef enum{DECODE_REQUEST=10,DECODE_RESPONSE=11,DECODE_STOP=12,FINALIZE=13,FINALIZE_RESPONSE=14,IDENTITY=15} MessageTag;
 
 typedef struct{
     Salt s;

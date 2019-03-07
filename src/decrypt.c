@@ -29,6 +29,7 @@ MPI_Datatype getMPI_RESPONSE_STRUCT();
 
 int main (int argc, char * argv[]){
 	int i;
+	void (*behaviour)(void);
 	char identity[TAG_SIZE];
 
 	//initialize the MPI
@@ -49,17 +50,14 @@ int main (int argc, char * argv[]){
 		mySend(MASTER_ID,TAG_SIZE,identity,MPI_CHAR,IDENTITY);
 	}
 
-	//wait to all
+	//set the behaviour
+	behaviour = (IS_MASTER(ID)) ? masterCommunicationBehaviour : calculationBehaviour;
+
+	//wait to all and then go to the behaviour
 	MPI_Barrier(MPI_COMM_WORLD);
+	behaviour();
 
-	//Taking each one to his role
-	if(IS_MASTER(ID)){
-		masterCommunicationBehaviour();
-	}else{
-		calculationBehaviour();
-	}
-
-	//Finalize execution
+	//finalize
 	EXIT(EXIT_SUCCESS);
 }
 
@@ -68,6 +66,7 @@ void calculationBehaviour(){
 	MessageTag tag;
 	Request request;
 	Response response;
+	long totalTries = 0;
 
 	//give the seed
 	srand(GET_SEED(ID));
@@ -76,14 +75,19 @@ void calculationBehaviour(){
 		//Reset the request and response, and wait to password request
 		memset(&request,0,sizeof(Request));
 		myRecv(MASTER_ID, 1, &request, MPI_REQUEST_STRUCT(request), DECODE_REQUEST);
+
 		//Hangle re request
 		solvedByMe = requestGestion(request,&response);
 		if(solvedByMe)
 			mySend(MASTER_ID,1,&response,MPI_RESPONSE_STRUCT(response),DECODE_RESPONSE);
+		//add the number of tries
+		totalTries += response.ntries;
+
 		//recv the decode_stop or finalize to discard it
 		tag = myRecv(MASTER_ID, 0, NULL, NULL_DATATYPE, MPI_ANY_TAG);
 		if(FINALIZE == tag){
-			EXIT(EXIT_SUCCESS);
+			//send the total number of tries and finalize
+			mySend(MASTER_ID, 1, &totalTries, MPI_LONG, FINALIZE_RESPONSE);
 			return;
 		}
 	}while(TRUE);
@@ -91,13 +95,15 @@ void calculationBehaviour(){
 
 void masterCommunicationBehaviour(){
 	bool solvedByMe;
-	Response response;
-	int nTasksToAssign;
-	Request reqToMaster;
-	TaskID * tasksToAssgin;
-	int solvedPasswords, i;
 	double start, end;
+	int solvedPasswords, i;
+	long totalTriesOfEach[MAX_TASKS], tmpTries = 0;
 
+	Response response;
+	Request reqToMaster;
+
+	int nTasksToAssign;
+	TaskID * tasksToAssgin;
 	TaskID firstAssignation[MAX_PASSWORDS];
 
 	Password passwordList[MAX_PASSWORDS];
@@ -142,6 +148,8 @@ void masterCommunicationBehaviour(){
 		//save here the end time, to have more accuracy on the total time
 		end = MPI_Wtime();
 		response.time = end - start;
+		//save the response tries to the total tries
+		tmpTries += response.ntries;
 
 		//stop all tasks working on the password except if it is the last time
 		for(i=0; i<passwordStatusList[response.passwordId].numTasksDecrypting; i++){
@@ -156,12 +164,20 @@ void masterCommunicationBehaviour(){
 		//save the last solved password id to assign tasks in the next iteration
 		tasksToAssgin = passwordStatusList[response.passwordId].taskIds;
 		nTasksToAssign = passwordStatusList[response.passwordId].numTasksDecrypting;
-
 	}
 
+	//print the current situation one last time, and the time
 	printCurrentSituation(passwordStatusList, passwordList);
+	printf("\nTOTAL: %.2fs\n",end-start);
 
-	printf("\nTOTAL: %.2fs",end-start);
+	//wait to the calculation tasks send us data
+	totalTriesOfEach[MASTER_ID] = tmpTries;
+	for(i=1; i<N_TASKS-1; i++){
+		myRecv(i, 1, &tmpTries, MPI_LONG, FINALIZE_RESPONSE);
+		totalTriesOfEach[i] = tmpTries;
+	}
+
+	//export the data to be processed
 }
 
 bool doCalculus(Password * p, int rangeMin, int rangeMax){
@@ -201,8 +217,10 @@ bool requestGestion(Request request, Response * response){
 
 		//Check if a message has been recived
 		if( 0 == (counter % NUMCHECKSMAIL)){
-			if(areThereAnyMsg())
+			if(areThereAnyMsg()){
+				response->ntries = counter;
 				return FALSE;
+			}
 		}
 		
 	}while(TRUE);
@@ -211,10 +229,7 @@ bool requestGestion(Request request, Response * response){
 
 void responseGestion(PasswordStatus * passwordStatusList, Response res){
 	PasswordID passwordId = res.passwordId;
-
-	//mark password as solved
 	passwordStatusList[passwordId].finished = TRUE;
-	//mark the task as solved and save the response
 	memcpy(&(passwordStatusList[passwordId].solverResponse),&res,sizeof(Response));
 }
 

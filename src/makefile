@@ -1,4 +1,4 @@
-N_PROCESS=4
+N_PROCESS=20
 
 decrypt: decrypt.c utils.h
 	mpicc -g decrypt.c -o decrypt -lcrypt
