@@ -96,6 +96,7 @@ void masterCommunicationBehaviour(){
 	Request reqToMaster;
 	TaskID * tasksToAssgin;
 	int solvedPasswords, i;
+	double start, end;
 
 	TaskID firstAssignation[MAX_PASSWORDS];
 
@@ -122,19 +123,25 @@ void masterCommunicationBehaviour(){
 	}
 
 	//give the seed
+	//NOTE: the seed is given after the password generation, to ensure that the process 0, 
+	//		have a different seed while the password decrypting
 	srand(GET_SEED(ID));
+
+	start = MPI_Wtime();
 
 	//wait for responses, and reasignate tasks to each free 
 	for(solvedPasswords = 0; solvedPasswords < N_PASSWORDS; solvedPasswords++){
 		//division of tasks: if is the firstTime, the asignation is to all tasks, if not, is to the tasks implicated in the last solved password
 		taskAssignation(tasksToAssgin, nTasksToAssign, passwordList, passwordStatusList, &reqToMaster);
 
-		//calculate the master assignement
+		//calculate the master assignement and if the one who has solved isn't the master, wait for a response
 		solvedByMe = requestGestion(reqToMaster,&response);
-
-		//if the one who has solved isn't the master, wait for a response
 		if(!solvedByMe)
 			myRecv(MPI_ANY_SOURCE, 1, &response, MPI_RESPONSE_STRUCT(response), DECODE_RESPONSE);
+
+		//save here the end time, to have more accuracy on the total time
+		end = MPI_Wtime();
+		response.time = end - start;
 
 		//stop all tasks working on the password except if it is the last time
 		for(i=0; i<passwordStatusList[response.passwordId].numTasksDecrypting; i++){
@@ -153,6 +160,8 @@ void masterCommunicationBehaviour(){
 	}
 
 	printCurrentSituation(passwordStatusList, passwordList);
+
+	printf("\nTOTAL: %.2fs",end-start);
 }
 
 bool doCalculus(Password * p, int rangeMin, int rangeMax){
@@ -172,29 +181,26 @@ bool doCalculus(Password * p, int rangeMin, int rangeMax){
 }
 
 bool requestGestion(Request request, Response * response){
-	double start;
-
-	//save the start time
-	start = MPI_Wtime();
-	memset(response,0,sizeof(Response));
+	long counter = 0;
 
 	//Loop until password solved or a new response recived
 	do{
 		//increment the try number
-		(response->ntries)++;
+		counter++;
 
 		//do the calculus and then check if the solution has been found
 		if(doCalculus(&(request.p),request.rangeMin,request.rangeMax)){
+			memset(response,0,sizeof(Response));
 			//fill the response
 			response->taskId = ID;
-			response->time = MPI_Wtime() - start;
+			response->ntries = counter;
 			response->passwordId = request.p.id;
 			//return TRUE, to know before, that the master has finished the task
 			return TRUE;
 		}
 
 		//Check if a message has been recived
-		if( 0 == (response->ntries % NUMCHECKSMAIL)){
+		if( 0 == (counter % NUMCHECKSMAIL)){
 			if(areThereAnyMsg())
 				return FALSE;
 		}
@@ -318,7 +324,7 @@ void printCurrentSituation(PasswordStatus * passwordStatusList, Password * passw
 		if(!passwordStatusList[i].finished)
 			printf("   --   |");
 		else
-			printf(" %6d |",passwordStatusList[i].solverResponse.time);
+			printf(" %6.2f |",passwordStatusList[i].solverResponse.time);
 
 		//number of tries
 		if(!passwordStatusList[i].finished)
@@ -372,18 +378,18 @@ char * getProcessorName(){
 bool areThereAnyMsg(){
 	int result;
 	MPI_Status status;
-	EXIT_ON_FAILURE(MPI_Iprobe( MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &result, &status));
+	MPI_Iprobe( MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &result, &status);
 	return (result != 0) ? TRUE : FALSE;
 }
 
 void mySend(TaskID destinationAddr, int nElements, void * data, MPI_Datatype dataType, MessageTag tag){
 	MPI_Request req;
-	EXIT_ON_FAILURE(MPI_Isend(data, nElements , dataType, destinationAddr, tag, MPI_COMM_WORLD, &req));
+	MPI_Isend(data, nElements , dataType, destinationAddr, tag, MPI_COMM_WORLD, &req);
 }
 
 MessageTag myRecv(TaskID destinationAddr, int nElements, void * data, MPI_Datatype dataType, MessageTag tag){
 	MPI_Status status;
-	EXIT_ON_FAILURE(MPI_Recv(data, nElements, dataType, destinationAddr, tag, MPI_COMM_WORLD, &status));
+	MPI_Recv(data, nElements, dataType, destinationAddr, tag, MPI_COMM_WORLD, &status);
 	return status.MPI_TAG;
 }
 
@@ -458,8 +464,8 @@ MPI_Datatype getMPI_RESPONSE_STRUCT(Response res){
 	MPI_Aint address[5];
 	MPI_Datatype types[4];
 
-	types[0] = MPI_INT; 
-	types[1] = MPI_LONG; 
+	types[0] = MPI_LONG; 
+	types[1] = MPI_DOUBLE; 
 	types[2] = MPI_INT;
 	types[3] = MPI_INT;
 

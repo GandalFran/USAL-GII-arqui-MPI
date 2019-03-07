@@ -76,24 +76,12 @@
     }while(0)
 
     
-#define EXIT(code)                         \
-    do{                                    \
-        LOG("\n[ID:%d][Finalized]",ID);    \
-        MPI_Finalize();                    \
-        exit(code);                        \
+#define EXIT(code)       \
+    do{                  \
+        MPI_Finalize();  \
+        exit(code);      \
     }while(0)
 
-#define EXIT_ON_FAILURE(returnValue)                                                                                \
-    do{                                                                                                             \
-        int tagsize;                                                                                                \
-        char errortag[TAG_SIZE];                                                                                    \
-        int code = (returnValue);                                                                                   \
-        if(code != (MPI_SUCCESS)){                                                                                  \
-            MPI_Error_string(code, errortag, &tagsize);                                                             \
-            LOG("\n[ID %d][ERROR %d][%s:%d:%s] %s", ID, code, __FILE__, __LINE__, __FUNCTION__, errortag);          \
-            EXIT(EXIT_FAILURE);                                                                                     \
-        }                                                                                                           \
-    }while(0)
 
 
 //data definition
@@ -120,8 +108,8 @@ typedef struct{
 }Request;
 
 typedef struct{
-    int ntries;
-    long time;
+    long ntries;
+    double time;
     TaskID taskId;
     PasswordID passwordId;;
 }Response;
