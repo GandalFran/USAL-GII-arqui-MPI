@@ -110,7 +110,7 @@ typedef struct{
 }Request;
 
 typedef struct{
-    unsigned long long int ntries;
+    unsigned long long ntries;
     double time;
     TaskID taskId;
     PasswordID passwordId;;
