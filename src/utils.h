@@ -70,13 +70,6 @@
         tag = crypt(dest,salt);     \
         strcpy(dest,tag);           \
     }while(0)
-
-#define LOG(str, ...)                           \
-    do{                                         \
-        fprintf(stderr, str, ##__VA_ARGS__);    \
-        fflush(stderr);                         \
-    }while(0)
-
     
 #define EXIT(code)       \
     do{                  \

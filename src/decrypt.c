@@ -394,8 +394,8 @@ void exportToFile(Password * passwordList, PasswordStatus * passwordStatusList, 
 	}
 
 	//export the rest of the data
-	fprintf(f,"\n\nTIME\t%.2f\nTRIES\t%ld",totalTime,totalTries);
-	printf("\nTIME:\t%.2fs \nTRIES:\t%llu\n",totalTime,totalTries);
+	fprintf(f,"\n\nTIME\t%.2f\nTRIES\t%ld\nNUM PROCS:\t%d\n",totalTime,totalTries,N_TASKS);
+	printf("\n\nTIME\t%.2f\nTRIES\t%ld\nNUM PROCS:\t%d\n",totalTime,totalTries,N_TASKS);
 
 	fclose(f);
 }
