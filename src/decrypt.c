@@ -14,7 +14,7 @@ void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passw
 
 //IO
 void printCurrentSituation(PasswordStatus * passwordStatusList, Password * passwordList);
-void exportToFile(Password * passwordList, PasswordStatus * passwordStatusList, unsigned long long int * triesPerTask, double totalTime);
+void exportToFile(Password * passwordList, PasswordStatus * passwordStatusList, unsigned long long * triesPerTask, double totalTime);
 
 //mpi facilities
 int getId();
@@ -67,7 +67,7 @@ void calculationBehaviour(){
 	MessageTag tag;
 	Request request;
 	Response response;
-	long totalTries = 0;
+	unsigned long long totalTries = 0;
 
 	//give the seed
 	srand(GET_SEED(ID));
@@ -88,7 +88,7 @@ void calculationBehaviour(){
 		tag = myRecv(MASTER_ID, 0, NULL, NULL_DATATYPE, MPI_ANY_TAG);
 		if(FINALIZE == tag){
 			//send the total number of tries and finalize
-			mySend(MASTER_ID, 1, &totalTries, MPI_LONG, FINALIZE_RESPONSE);
+			mySend(MASTER_ID, 1, &totalTries, MPI_UNSIGNED_LONG_LONG, FINALIZE_RESPONSE);
 			return;
 		}
 	}while(TRUE);
@@ -98,7 +98,7 @@ void masterCommunicationBehaviour(){
 	bool solvedByMe;
 	int solvedPasswords, i;
 	double start, end, totalTime;
-	unsigned long long int triesPerTask[MAX_TASKS], tmpTries = 0;
+	unsigned long long triesPerTask[MAX_TASKS], tmpTries = 0;
 
 	Response response;
 	Request reqToMaster;
@@ -113,6 +113,7 @@ void masterCommunicationBehaviour(){
 	//reset the control arrays and other vars
 	memset(passwordList,0,MAX_PASSWORDS*sizeof(Password));
 	memset(passwordStatusList,0,MAX_PASSWORDS*sizeof(PasswordStatus));
+	memset(triesPerTask,0,MAX_PASSWORDS*sizeof(unsigned long long));
 
 	for(i=0; i<MAX_PASSWORDS; i++)
 		firstAssignation[i] = passwordStatusList[i].passwordId = i;
@@ -172,10 +173,9 @@ void masterCommunicationBehaviour(){
 
 	//wait to the calculation tasks send us data
 	totalTime = end - start;
-	triesPerTask[MASTER_ID] = tmpTries;
-	for(i=1; i<N_TASKS-1; i++){
-		myRecv(i, 1, &tmpTries, MPI_LONG, FINALIZE_RESPONSE);
-		triesPerTask[i] = tmpTries;
+	triesPerTask[0] = tmpTries;
+	for(i=1; i<N_TASKS; i++){
+		myRecv(i, 1, &triesPerTask[i], MPI_UNSIGNED_LONG_LONG, FINALIZE_RESPONSE);
 	}
 
 	exportToFile(passwordList, passwordStatusList, triesPerTask, totalTime);
@@ -377,10 +377,10 @@ void printCurrentSituation(PasswordStatus * passwordStatusList, Password * passw
 }
 
 
-void exportToFile(Password * passwordList, PasswordStatus * passwordStatusList, unsigned long long int * triesPerTask, double totalTime){
+void exportToFile(Password * passwordList, PasswordStatus * passwordStatusList, unsigned long long * triesPerTask, double totalTime){
 	int i;
 	FILE * f;
-	unsigned long long int totalTries;
+	unsigned long long totalTries;
 
 	f = fopen(OUTPUT_FILE,"w+");
 
@@ -402,7 +402,7 @@ void exportToFile(Password * passwordList, PasswordStatus * passwordStatusList, 
 	fprintf(f,"\n\nTries per task:");
 	for(i=0; i< N_TASKS; i++){
 		totalTries += triesPerTask[i];
-		fprintf(f,"\n%d %llu",i,triesPerTask[i]);
+		fprintf(f,"\n\t%d %llu",i,triesPerTask[i]);
 	}
 
 	//export the rest of the data

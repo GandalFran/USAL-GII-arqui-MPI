@@ -43,7 +43,7 @@
 
 #define GET_RANDOM_STR_IN_BOUNDS(str,a,b)				\
 	do{													\
-		sprintf(str,"%08d",GET_RANDOM_IN_BOUNDS(a,b));	\
+		sprintf(str,"%07d",GET_RANDOM_IN_BOUNDS(a,b));	\
 	}while(0)
 
 //mpi facilities
