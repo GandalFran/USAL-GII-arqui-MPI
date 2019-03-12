@@ -148,6 +148,7 @@ void masterCommunicationBehaviour(){
 		//save here the end time, to have more accuracy on the total time
 		end = MPI_Wtime();
 		response.time = end - start;
+		passwordStatusList[response.passwordId].usedTime = end - passwordStatusList[response.passwordId].usedTime;
 		//save the response tries to the total tries
 		tmpTries += response.ntries;
 
@@ -270,6 +271,9 @@ void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passw
 		}
 
 		//update the selected password status
+		if(0 == passwordStatusList[selectedPassword].numTasksDecrypting){
+			passwordStatusList[selectedPassword].usedTime = MPI_Wtime();
+		}
 		passwordStatusList[selectedPassword].taskIds[passwordStatusList[selectedPassword].numTasksDecrypting] = taskToAssign[currentTask];
 		passwordStatusList[selectedPassword].numTasksDecrypting++;
 	}
@@ -278,6 +282,7 @@ void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passw
 	for(currentTask=0; currentTask < nTasksToAssign; currentTask++){
 		if(!isRequestSend[currentTask]){
 			currentPassword = passwordAssignedToTask[currentTask];
+
 
 			//calculate the range increments
 			rangeIncrement = (int) (((int) MAX_RAND) / passwordStatusList[currentPassword].numTasksDecrypting);
@@ -318,8 +323,8 @@ void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passw
 void printCurrentSituation(PasswordStatus * passwordStatusList, Password * passwordList){
 	int i,j;
 
-	char separator[]="+----+--------+-------------+--------+--------+-----------------+---------------------------------";
-	char header[]=   "| ID | NORMAL |  ENCRYPTED  | SOLVER |  TIME  | NUMBER OF TRIES |  TASKS WORKING                  ";
+	char separator[]="+----+--------+-------------+--------+--------+----------+---------------+---------------------------------";
+	char header[]=   "| ID | NORMAL |  ENCRYPTED  | SOLVER |  TIME  |TIME TAKEN|NUMBER OF TRIES|  TASKS WORKING                  ";
 
 	printf("\n%s\n%s",separator,header);
 
@@ -341,11 +346,17 @@ void printCurrentSituation(PasswordStatus * passwordStatusList, Password * passw
 		else
 			printf(" %6.2f |",passwordStatusList[i].solverResponse.time);
 
+		//time taken
+		if(!passwordStatusList[i].finished)
+			printf("    --    |");
+		else
+			printf(" %8.2f |",passwordStatusList[i].usedTime);
+
 		//number of tries
 		if(!passwordStatusList[i].finished)
-			printf("        --       |");
+			printf("       --      |");
 		else
-			printf(" %15llu |",passwordStatusList[i].solverResponse.ntries);
+			printf(" %13llu |",passwordStatusList[i].solverResponse.ntries);
 
 		//working status
 		if(passwordStatusList[i].finished)
@@ -376,12 +387,13 @@ void exportToFile(Password * passwordList, PasswordStatus * passwordStatusList, 
 	//export the passwords 
 	fprintf(f,"\nPasswords:");
 	for(i=0; i< N_PASSWORDS; i++){
-		fprintf(f,"\n%d %s %s %d %.2f %d",
+		fprintf(f,"\n%d %s %s %d %.2f %.2f %d",
 			passwordList[i].id,
 			passwordList[i].decrypted,
 			passwordList[i].encrypted,
 			passwordStatusList[i].solverResponse.taskId,
 			passwordStatusList[i].solverResponse.time,
+			passwordStatusList[i].usedTime,
 			passwordStatusList[i].solverResponse.ntries
 		);
 	}

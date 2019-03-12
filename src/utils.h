@@ -12,7 +12,7 @@
 
 //======================================================================
 #define N_TASKS (MPITASKS)
-#define N_PASSWORDS (10)
+#define N_PASSWORDS (5)
 #define OUTPUT_FILE "output.csv"
 
 #define NUMCHECKSMAIL (10)
@@ -117,6 +117,7 @@ typedef struct{
     TaskID taskIds[MAX_TASKS];
 
     Response solverResponse;
+    double usedTime;
 }PasswordStatus;
 
 
