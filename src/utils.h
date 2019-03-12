@@ -24,8 +24,8 @@
 #define SALT_SIZE (3)
 #define TAG_SIZE (100)
 #define PASSWORD_SIZE (20)
-#define MAX_TASKS (30)
-#define MAX_PASSWORDS (30)
+#define MAX_TASKS (70)
+#define MAX_PASSWORDS (70)
 
 //Random number generation
 #define GET_SEED(id) ( (id)+(SEED_BASE) )
