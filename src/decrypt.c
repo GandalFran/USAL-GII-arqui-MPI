@@ -4,17 +4,17 @@
 
 //Behaviours
 void calculationBehaviour();
-void masterCommunicationBehaviour();
+void communicationBehaviour();
 
 //auxiliar behaviour functions
 bool doCalculus(Password * p, int rangeMin, int rangeMax);
 bool requestGestion(Request request, Response * response);
 void responseGestion(PasswordStatus * passwordStatusList, Response res);
-void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passwordList, PasswordStatus * passwordStatusList, Request * masterReq);
+void taskDispatcher(TaskID * taskToAssign, int nTasksToAssign, Password * passwordList, PasswordStatus * passwordStatusList, Request * masterReq);
 
 //IO
-void printCurrentSituation(PasswordStatus * passwordStatusList, Password * passwordList);
-void exportToFile(Password * passwordList, PasswordStatus * passwordStatusList, unsigned long long * triesPerTask, double totalTime);
+void printTaskStatus(PasswordStatus * passwordStatusList, Password * passwordList);
+void exportToCsv(Password * passwordList, PasswordStatus * passwordStatusList, unsigned long long * triesPerTask, double totalTime);
 
 //mpi facilities
 int getId();
@@ -52,7 +52,7 @@ int main (int argc, char * argv[]){
 	}
 
 	//set the behaviour
-	behaviour = (IS_MASTER(ID)) ? masterCommunicationBehaviour : calculationBehaviour;
+	behaviour = (IS_MASTER(ID)) ? communicationBehaviour : calculationBehaviour;
 
 	//wait to all and then go to the behaviour
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -94,7 +94,7 @@ void calculationBehaviour(){
 	}while(TRUE);
 }
 
-void masterCommunicationBehaviour(){
+void communicationBehaviour(){
 	bool solvedByMe;
 	int solvedPasswords, i;
 	double start, end, totalTime;
@@ -139,7 +139,7 @@ void masterCommunicationBehaviour(){
 	//wait for responses, and reasignate tasks to each free 
 	for(solvedPasswords = 0; solvedPasswords < N_PASSWORDS; solvedPasswords++){
 		//division of tasks: if is the firstTime, the asignation is to all tasks, if not, is to the tasks implicated in the last solved password
-		taskAssignation(tasksToAssgin, nTasksToAssign, passwordList, passwordStatusList, &reqToMaster);
+		taskDispatcher(tasksToAssgin, nTasksToAssign, passwordList, passwordStatusList, &reqToMaster);
 
 		//calculate the master assignement and if the one who has solved isn't the master, wait for a response
 		solvedByMe = requestGestion(reqToMaster,&response);
@@ -169,7 +169,7 @@ void masterCommunicationBehaviour(){
 	}
 
 	//print the current situation one last time, and the time
-	printCurrentSituation(passwordStatusList, passwordList);
+	printTaskStatus(passwordStatusList, passwordList);
 
 	//wait to the calculation tasks send us data
 	totalTime = end - start;
@@ -178,7 +178,7 @@ void masterCommunicationBehaviour(){
 		myRecv(i, 1, &triesPerTask[i], MPI_UNSIGNED_LONG_LONG, FINALIZE_RESPONSE);
 	}
 
-	exportToFile(passwordList, passwordStatusList, triesPerTask, totalTime);
+	exportToCsv(passwordList, passwordStatusList, triesPerTask, totalTime);
 }
 
 bool doCalculus(Password * p, int rangeMin, int rangeMax){
@@ -234,7 +234,7 @@ void responseGestion(PasswordStatus * passwordStatusList, Response res){
 	memcpy(&(passwordStatusList[passwordId].solverResponse),&res,sizeof(Response));
 }
 
-void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passwordList, PasswordStatus * passwordStatusList, Request * masterReq){
+void taskDispatcher(TaskID * taskToAssign, int nTasksToAssign, Password * passwordList, PasswordStatus * passwordStatusList, Request * masterReq){
 	Request req;
 	int i, j, rangeIncrement;
 
@@ -278,7 +278,7 @@ void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passw
 		passwordStatusList[selectedPassword].numTasksDecrypting++;
 	}
 
-	//foreach task, mySend the messages, and if two tasks are designed to the same password, do at the same time
+	//foreach task, send the messages, and if two tasks are designed to the same password, do at the same time
 	for(currentTask=0; currentTask < nTasksToAssign; currentTask++){
 		if(!isRequestSend[currentTask]){
 			currentPassword = passwordAssignedToTask[currentTask];
@@ -299,14 +299,14 @@ void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passw
 				req.rangeMin = req.rangeMax + 1;
 				req.rangeMax = ( i == passwordStatusList[currentPassword].numTasksDecrypting-1 ) ? (MAX_RAND) : (req.rangeMin + rangeIncrement);
 
-				//mySend the request
+				//send the request
 				if( IS_MASTER(passwordStatusList[currentPassword].taskIds[i]) )
 					memcpy(masterReq,&req,sizeof(Request));
 				else
 					mySend( passwordStatusList[currentPassword].taskIds[i], 1, &req, MPI_REQUEST_STRUCT(req), DECODE_REQUEST);
 			}
 
-			//mark in isRequestSend, which requests has been mySend
+			//mark in isRequestSend, which requests has been send
 			for(i=0; i < nTasksToAssign; i++){
 				if(passwordAssignedToTask[i] == currentPassword){
 					isRequestSend[i] = TRUE;
@@ -315,12 +315,12 @@ void taskAssignation(TaskID * taskToAssign, int nTasksToAssign, Password * passw
 		}
 	}
 
-	printCurrentSituation(passwordStatusList, passwordList);
+	printTaskStatus(passwordStatusList, passwordList);
 }
 
 
 // ----------------------------------------------------------------------------------------------------------------
-void printCurrentSituation(PasswordStatus * passwordStatusList, Password * passwordList){
+void printTaskStatus(PasswordStatus * passwordStatusList, Password * passwordList){
 	int i,j;
 
 	char separator[]="+----+--------+-------------+--------+--------+----------+---------------+---------------------------------";
@@ -377,7 +377,7 @@ void printCurrentSituation(PasswordStatus * passwordStatusList, Password * passw
 }
 
 
-void exportToFile(Password * passwordList, PasswordStatus * passwordStatusList, unsigned long long * triesPerTask, double totalTime){
+void exportToCsv(Password * passwordList, PasswordStatus * passwordStatusList, unsigned long long * triesPerTask, double totalTime){
 	int i;
 	FILE * f;
 	unsigned long long totalTries;
@@ -387,7 +387,7 @@ void exportToFile(Password * passwordList, PasswordStatus * passwordStatusList, 
 	//export the passwords 
 	fprintf(f,"\nPasswords:");
 	for(i=0; i< N_PASSWORDS; i++){
-		fprintf(f,"\n%d %s %s %d %.2f %.2f %d",
+		fprintf(f,"\n%d %s %s %d %.2f %.2f %lld",
 			passwordList[i].id,
 			passwordList[i].decrypted,
 			passwordList[i].encrypted,
@@ -406,8 +406,8 @@ void exportToFile(Password * passwordList, PasswordStatus * passwordStatusList, 
 	}
 
 	//export the rest of the data
-	fprintf(f,"\n\nTIME\t%.2f\nTRIES\t%ld\nNUM PROCS:\t%d\n",totalTime,totalTries,N_TASKS);
-	printf("\n\nTIME\t%.2f\nTRIES\t%ld\nNUM PROCS:\t%d\n",totalTime,totalTries,N_TASKS);
+	fprintf(f,"\n\nTIME\t%.2f\nTRIES\t%lld\nNUM PROCS:\t%d\n",totalTime,totalTries,N_TASKS);
+	printf("\n\nTIME\t%.2f\nTRIES\t%lld\nNUM PROCS:\t%d\n",totalTime,totalTries,N_TASKS);
 
 	fclose(f);
 }
@@ -437,7 +437,7 @@ char * getProcessorName(){
 	return name;
 }
 
-//Wrap the mySend, myRecv, ... and more communication tasks
+//Wrap the send, recv, ... and more communication tasks
 bool areThereAnyMsg(){
 	int result;
 	MPI_Status status;
