@@ -8,8 +8,8 @@ void communicationBehaviour();
 
 //auxiliar behaviour functions
 bool doCalculus(Password * p, int rangeMin, int rangeMax);
-bool requestGestion(Request request, Response * response);
-void responseGestion(PasswordStatus * passwordStatusList, Response res);
+bool requestHandler(Request request, Response * response);
+void responseHandler(PasswordStatus * passwordStatusList, Response res);
 void taskDispatcher(TaskID * taskToAssign, int nTasksToAssign, Password * passwordList, PasswordStatus * passwordStatusList, Request * masterReq);
 
 //IO
@@ -78,7 +78,7 @@ void calculationBehaviour(){
 		myRecv(MASTER_ID, 1, &request, MPI_REQUEST_STRUCT(request), DECODE_REQUEST);
 
 		//Hangle re request
-		solvedByMe = requestGestion(request,&response);
+		solvedByMe = requestHandler(request,&response);
 		if(solvedByMe)
 			mySend(MASTER_ID,1,&response,MPI_RESPONSE_STRUCT(response),DECODE_RESPONSE);
 		//add the number of tries
@@ -142,7 +142,7 @@ void communicationBehaviour(){
 		taskDispatcher(tasksToAssgin, nTasksToAssign, passwordList, passwordStatusList, &reqToMaster);
 
 		//calculate the master assignement and if the one who has solved isn't the master, wait for a response
-		solvedByMe = requestGestion(reqToMaster,&response);
+		solvedByMe = requestHandler(reqToMaster,&response);
 		if(!solvedByMe)
 			myRecv(MPI_ANY_SOURCE, 1, &response, MPI_RESPONSE_STRUCT(response), DECODE_RESPONSE);
 
@@ -161,7 +161,7 @@ void communicationBehaviour(){
 		}
 
 		//make the response treatment
-		responseGestion(passwordStatusList,response);
+		responseHandler(passwordStatusList,response);
 
 		//save the last solved password id to assign tasks in the next iteration
 		tasksToAssgin = passwordStatusList[response.passwordId].taskIds;
@@ -197,7 +197,7 @@ bool doCalculus(Password * p, int rangeMin, int rangeMax){
 	return FALSE;
 }
 
-bool requestGestion(Request request, Response * response){
+bool requestHandler(Request request, Response * response){
 	long counter = 0;
 
 	//Loop until password solved or a new response recived
@@ -228,7 +228,7 @@ bool requestGestion(Request request, Response * response){
 
 }
 
-void responseGestion(PasswordStatus * passwordStatusList, Response res){
+void responseHandler(PasswordStatus * passwordStatusList, Response res){
 	PasswordID passwordId = res.passwordId;
 	passwordStatusList[passwordId].finished = TRUE;
 	memcpy(&(passwordStatusList[passwordId].solverResponse),&res,sizeof(Response));
