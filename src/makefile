@@ -1,6 +1,6 @@
 N_PROCESS=4
 
-decrypt: decrypt.c utils.h
+decrypt: decrypt.c
 	mpicc -g decrypt.c -o decrypt -lcrypt
 
 multipleRun: decrypt
